@@ -1,0 +1,59 @@
+% =====================================================================
+%  1. L13 — Query Evaluation: Processing Models
+%     (Lesson plan §1  •  Presentation flow: Act 1, ~20 min)
+% =====================================================================
+\sectionsubtitle{Lecture 13 \textbullet\ How does the DBMS execute a plan tree?}
+\section{Processing Models}
+
+% ---------------------------------------------------------------------
+\subsection{What is a processing model?}
+\begin{frame}{What is a processing model?}
+  \placeholder{Definition; the two axes: direction (pull/push) \& granularity (1 / batch / all) \src{L13}{2}}
+  \placeholder{Reminder: a query plan is a tree (leaves = scans, root = result)}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Iterator (Volcano) model}
+\begin{frame}{Iterator model: \texttt{open()}, \texttt{next()}, \texttt{close()}}
+  \placeholder{Interface, internal state, composability \src{L13}{3}}
+\end{frame}
+
+\begin{frame}{Control flow: top-down, pull-based}
+  \placeholder{Driver loop pseudo-code; LIMIT for free \src{L13}{4--5}}
+\end{frame}
+
+\begin{frame}{Operator examples}
+  \placeholder{Selection $\sigma$, heap scan, nested-loops join, external sort \src{L13}{6--10}}
+\end{frame}
+
+\begin{frame}{A whole plan in the iterator model}
+  \placeholder{Plan figure + execution order + tiny-data trace \src{L13}{11--12}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Pipelining vs.\ blocking operators}
+\begin{frame}{Pipelining vs.\ pipeline breakers}
+  \placeholder{Tuple pipelining; blocking operators; hash join blocks only on build \src{L13}{13}}
+\end{frame}
+
+\begin{frame}{Iterator model: pros and cons}
+  \placeholder{Pros/cons; why CPU overhead matters today \src{L13}{14}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Vectorised (batch) model}
+\begin{frame}{Vectorised (batch) model}
+  \placeholder{\texttt{next()} returns a batch; fewer calls, SIMD, OLAP \src{L13}{15--16}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Materialisation model}
+\begin{frame}{Materialisation model}
+  \placeholder{Bottom-up push; OLTP vs OLAP; two meanings of ``materialise'' \src{L13}{17--18}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Summary of L13}
+\begin{frame}{Processing models at a glance}
+  \placeholder{3-column summary table + LIMIT quiz \src{L13}{19}}
+\end{frame}

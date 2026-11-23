@@ -1,0 +1,80 @@
+% =====================================================================
+%  2. L14 — Query Optimisation: Plan Space
+%     (Lesson plan §2  •  Presentation flow: Act 2, ~25 min)
+% =====================================================================
+\sectionsubtitle{Lecture 14 \textbullet\ Which alternative plans exist, and how are they generated?}
+\section{Query Optimisation: Plan Space}
+
+% ---------------------------------------------------------------------
+\subsection{Why optimise?}
+\begin{frame}{Why optimise?}
+  \placeholder{Declarative vs imperative; goal; NP-hard $\Rightarrow$ ``avoid bad plans'' \src{L14}{2--3}}
+\end{frame}
+
+\begin{frame}{Optimisation strategies}
+  \placeholder{System R and other strategies (Cascades, stratified, randomised, AI) \src{L14}{4}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{The query lifecycle}
+\begin{frame}{The query lifecycle}
+  \placeholder{Parser $\to$ Rewriter $\to$ Optimiser $\to$ Executor diagram \src{L14}{5}}
+\end{frame}
+
+\begin{frame}{Parser and query blocks}
+  \placeholder{Syntactic/semantic analysis; query block shape \src{L14}{6}}
+\end{frame}
+
+\begin{frame}{Rewriter: heuristic simplifications}
+  \placeholder{Equivalence definition; 4 rewrite examples (PK requirement!) \src{L14}{7--9}}
+\end{frame}
+
+\begin{frame}{Optimiser}
+  \placeholder{Per query block: enumerate, cost, choose \src{L14}{10}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Three components of optimisation}
+\begin{frame}{Three components of query optimisation}
+  \placeholder{Plan space \textbullet\ cost estimation \textbullet\ search strategy \src{L14}{12}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Relational algebra equivalences}
+\begin{frame}{Relational algebra equivalences}
+  \placeholder{Selection cascade/commute; projection cascade; $\times$ assoc./comm. \src{L14}{15--16}}
+\end{frame}
+
+\begin{frame}{Are joins associative and commutative?}
+  \placeholder{Three attempts on R(A,Y), S(A,B), T(B,Z) + counter-example \src{L14}{17}}
+\end{frame}
+
+\begin{frame}{Join ordering and transitivity}
+  \placeholder{Four equivalent join trees; transitivity adds predicates \src{L14}{18--19}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Heuristics}
+\begin{frame}{Heuristic: push selections down}
+  \placeholder{Filter early, reorder, split, simplify; pushdown picture \src{L14}{21--22}}
+\end{frame}
+
+\begin{frame}{Heuristic: push projections down}
+  \placeholder{Keep requested \& required attributes (join keys) \src{L14}{23--24}}
+\end{frame}
+
+\begin{frame}{Heuristic: avoid Cartesian products}
+  \placeholder{Prefer theta-joins; the small $R\times T$ exception \src{L14}{25}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Physical equivalences}
+\begin{frame}{Physical equivalences}
+  \placeholder{Access paths; BNLJ / INLJ / SMJ / Grace hash -- when each is good \src{L14}{26--27}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Summary of L14}
+\begin{frame}{Summary of L14}
+  \placeholder{Lots of plans; machines enumerate; rewriting helps; filter early \src{L14}{28}}
+\end{frame}

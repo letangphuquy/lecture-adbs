@@ -1,0 +1,9 @@
+# Shell scripts and Makefiles must keep LF endings (CRLF breaks them on Linux/macOS)
+*.sh      text eol=lf
+Makefile  text eol=lf
+*.ps1     text eol=crlf
+*.tex     text
+*.sty     text
+*.jpg     binary
+*.png     binary
+*.pdf     binary

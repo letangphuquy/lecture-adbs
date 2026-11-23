@@ -1,0 +1,17 @@
+# LaTeX build output
+build/
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.xdv
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

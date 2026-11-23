@@ -1,0 +1,48 @@
+% =====================================================================
+%  COMP5330 Advanced Database Systems — Week 5
+%  Query Evaluation (Processing Models) & Query Optimisation (Plan Space)
+%  Source lesson plans: ../../ADB_Week5/Week5_LessonPlan_{EN,VI}.md
+%  Build:  latexmk main.tex      (or  ..\build.ps1 week05)
+% =====================================================================
+\makeatletter\def\input@path{{../theme/}}\makeatother   % find the shared theme
+\documentclass[aspectratio=169,11pt,t,xcolor=table]{beamer}   % t = top-aligned frames
+% \documentclass[aspectratio=169,11pt,t,xcolor=table,handout]{beamer}  % one page per frame, no overlays
+\usetheme{VinUni}
+
+% Speaker notes (Part B "Presentation flow" goes into \note{...}):
+% \setbeameroption{show notes on second screen=right}
+
+% ---- Switches --------------------------------------------------------
+\newif\ifshowexamples \showexamplestrue   % appendix with layout examples
+
+% ---- Metadata --------------------------------------------------------
+\title[COMP5330 · Week 5]{Query Evaluation \& Query Optimisation}
+\subtitle{Processing Models \textbullet\ Plan Space \textbullet\ A Worked Example}
+\author{Your Name}
+\institute{COMP5330 Advanced Database Systems \textbullet\ VinUniversity}
+\date{Week 5}
+\vinuCourse{COMP5330 \textbullet\ ADVANCED DATABASE SYSTEMS}
+\vinuFooter{COMP5330 Advanced Database Systems \textbullet\ Week 5: Query Evaluation \& Optimisation}
+
+\begin{document}
+
+\vinuTitleFrame
+
+\begin{frame}{Today's agenda}
+  \tableofcontents[hideallsubsections]
+\end{frame}
+
+\input{sections/00-opening}
+\input{sections/01-l13-processing-models}
+\input{sections/02-l14-plan-space}
+\input{sections/03-l15-plan-space-example}
+\input{sections/04-wrap-up}
+
+\vinuClosingFrame{Thank you!}{Questions \& discussion}
+
+\ifshowexamples
+  \appendix
+  \input{sections/99-style-examples}
+\fi
+
+\end{document}

@@ -1,0 +1,187 @@
+% =====================================================================
+%  APPENDIX — Style examples (copy-paste snippets for building slides)
+%  Turn off with \showexamplesfalse in main.tex.
+% =====================================================================
+\sectionsubtitle{Copy-paste snippets for building the slides (remove before teaching)}
+\section{Appendix: Slide Layout Examples}
+
+% ---------------------------------------------------------------------
+\subsection{Bullet points \& numbered lists}
+\begin{frame}{Bullet points}{Nested \texttt{itemize}, emphasis and alerts}
+  \begin{itemize}
+    \item First-level bullet: red triangle marker
+    \begin{itemize}
+      \item Second-level bullet: navy dash
+      \begin{itemize}
+        \item Third level: grey dot (use sparingly)
+      \end{itemize}
+    \end{itemize}
+    \item Use \alert{\texttt{\textbackslash alert\{...\}}} or \hl{\texttt{\textbackslash hl\{...\}}} for key terms
+    \item Inline source tags: \texttt{\textbackslash src\{L13\}\{3\}} $\to$ \src{L13}{3}
+    \item Inline code \texttt{next()} and maths: $\sel{\mathit{rating}>5}(\mathit{Sailors})$
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Numbered lists and step-by-step reveal}{\texttt{enumerate} + overlay \texttt{<+->}}
+  \begin{enumerate}[<+->]
+    \item Items appear one per click (\texttt{\textbackslash begin\{enumerate\}[<+->]})
+    \item Good for ``questions before reveals''
+    \begin{enumerate}
+      \item Sub-steps are numbered 2.1, 2.2, \dots
+    \end{enumerate}
+    \item Or insert \texttt{\textbackslash pause} anywhere in the frame
+  \end{enumerate}
+  \note{Speaker notes go here: \texttt{\textbackslash note\{...\}}. Enable them in main.tex.}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Two-column layouts}
+\begin{frame}{Two-column layout}{\texttt{columns} environment}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      \textbf{Left column}
+      \begin{itemize}
+        \item Widths are fractions of \texttt{\textbackslash textwidth}
+        \item \texttt{[T]} aligns the columns at the top
+      \end{itemize}
+    \column{0.48\textwidth}
+      \textbf{Right column}
+      \begin{itemize}
+        \item Typical use: comparison, \\ before / after, text + figure
+        \item Three columns? Use three \texttt{\textbackslash column\{0.31\textbackslash textwidth\}}
+      \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Comparison layout with blocks}{\texttt{block} / \texttt{alertblock} / \texttt{exampleblock}}
+  \begin{columns}[T]
+    \column{0.31\textwidth}
+      \begin{block}{Iterator}
+        One tuple, pull, top-down
+      \end{block}
+    \column{0.31\textwidth}
+      \begin{exampleblock}{Vectorised}
+        A batch, pull, top-down
+      \end{exampleblock}
+    \column{0.31\textwidth}
+      \begin{alertblock}{Materialisation}
+        Everything, push, bottom-up
+      \end{alertblock}
+  \end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Figures}
+\begin{frame}{Inserting a figure}{\texttt{\textbackslash includegraphics} from the \texttt{figures/} folder}
+  \begin{columns}[c]
+    \column{0.60\textwidth}
+      \begin{figure}
+        \includegraphics[width=\linewidth]{example-io-costs}
+        \caption{Example figure (PNG/PDF in \texttt{figures/}).}
+      \end{figure}
+    \column{0.36\textwidth}
+      \begin{itemize}
+        \item Put files in \texttt{figures/}; no extension needed
+        \item Prefer PDF/SVG-exported vector figures
+        \item \texttt{\textbackslash caption} is optional
+      \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Figure not ready yet? Use a placeholder}{\texttt{\textbackslash figplaceholder[width]\{height\}\{label\}}}
+  \begin{columns}[c]
+    \column{0.48\textwidth}
+      \figplaceholder{40mm}{Query plan tree\\ \src{L13}{11}}
+    \column{0.48\textwidth}
+      \placeholder{Text placeholder: \texttt{\textbackslash placeholder\{...\}}}
+      \placeholder{Search \texttt{TODO} in the PDF to find what is left}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Drawing a query plan with TikZ}{Native diagrams stay sharp and use the theme colours}
+  \centering
+  \begin{tikzpicture}[
+      op/.style={draw=vinuNavy,fill=vinuNavy!6,rounded corners=1mm,minimum width=22mm,
+                 minimum height=6mm,font=\small,text=vinuNavy},
+      leaf/.style={op,fill=vinuRed!8,draw=vinuRed},
+      edge/.style={-{Stealth[length=2mm]},vinuNavy,thick},
+      node distance=6mm and 10mm]
+    \node[op]   (pi)   {$\proj{\mathit{sname}}$};
+    \node[op,below=of pi]  (join) {$\njoin[\mathit{sid}=\mathit{sid}]$};
+    \node[op,below left=of join]  (s1) {$\sel{\mathit{bid}=100}$};
+    \node[op,below right=of join] (s2) {$\sel{\mathit{rating}>5}$};
+    \node[leaf,below=of s1] (R) {Reserves};
+    \node[leaf,below=of s2] (S) {Sailors};
+    \draw[edge] (R) -- (s1); \draw[edge] (S) -- (s2);
+    \draw[edge] (s1) -- (join); \draw[edge] (s2) -- (join);
+    \draw[edge] (join) -- (pi);
+    \node[right=4mm of pi,font=\scriptsize,text=vinuGray] {arrows = data flow};
+  \end{tikzpicture}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Tables, code and maths}
+\begin{frame}{Tables}{\texttt{booktabs} + a highlighted row}
+  \centering
+  \begin{tabular}{l l l l}
+    \toprule
+    & \textbf{Iterator} & \textbf{Vectorised} & \textbf{Materialisation} \\
+    \midrule
+    Direction & Top-down (pull) & Top-down (pull) & Bottom-up (push) \\
+    Emits     & Single tuple    & Tuple batch     & Entire tuple set \\
+    \rowcolor{vinuRed!8}
+    Target    & General purpose & OLAP            & OLTP \\
+    \bottomrule
+  \end{tabular}\\[2mm]
+  {\scriptsize\color{vinuGray} \texttt{\textbackslash rowcolor} works because main.tex loads beamer with \texttt{xcolor=table}.}
+\end{frame}
+
+\begin{frame}[fragile]{SQL and pseudo-code}{\texttt{lstlisting} --- the frame must be \texttt{[fragile]}}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+\begin{lstlisting}
+-- SQL (default language)
+SELECT S.sname
+FROM   Reserves R, Sailors S
+WHERE  R.sid = S.sid
+  AND  R.bid = 100
+  AND  S.rating > 5;
+\end{lstlisting}
+    \column{0.50\textwidth}
+\begin{lstlisting}[language=pseudo]
+Function eval(q)
+  q.open()
+  r = q.next()
+  while r != EOF do
+    emit(r)    // ship to client
+    r = q.next()
+  q.close()
+\end{lstlisting}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Relational algebra}{Shorthands: \texttt{\textbackslash sel}, \texttt{\textbackslash proj}, \texttt{\textbackslash njoin}, \texttt{\textbackslash cross}}
+  Aligned equivalences (\texttt{align*}, align at \texttt{\&}):
+  \begin{align*}
+    \sel{c_1 \wedge c_2}(R) &\equiv \sel{c_1}\big(\sel{c_2}(R)\big)\\
+    R \cross (S \cross T)   &\equiv (R \cross S) \cross T
+  \end{align*}
+  A single displayed expression (\texttt{\textbackslash[ \dots \textbackslash]}):
+  \[
+    \proj{\mathit{sname}}\big(\sel{\mathit{bid}=100}(\mathit{Reserves}) \njoin[\mathit{sid}=\mathit{sid}] \sel{\mathit{rating}>5}(\mathit{Sailors})\big)
+  \]
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Callout boxes}
+\begin{frame}{Callout boxes}{Matching the markers of the lesson plan}
+  \begin{keybox}[Key idea]
+    \texttt{keybox} --- definitions and take-aways.
+  \end{keybox}
+  \begin{notebox}
+    \texttt{notebox} --- ``\faExclamationTriangle\ Precision note'': common over-simplifications.
+  \end{notebox}
+  \begin{extrabox}[Extra --- ELI5]
+    \texttt{extrabox} --- own examples and analogies (``\faPuzzlePiece\ Extra'').
+  \end{extrabox}
+\end{frame}

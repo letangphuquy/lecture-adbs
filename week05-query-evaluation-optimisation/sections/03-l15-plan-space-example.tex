@@ -1,0 +1,68 @@
+% =====================================================================
+%  3. L15 — Query Optimisation: Plan Space Example
+%     (Lesson plan §3  •  Presentation flow: Act 3, ~25 min)
+%  Tip: keep a running "scoreboard" of I/O costs on each plan slide.
+% =====================================================================
+\sectionsubtitle{Lecture 15 \textbullet\ Pricing ten plans for one query}
+\section{Plan Space: A Worked Example}
+
+% ---------------------------------------------------------------------
+\subsection{Setup: schema, statistics, cost model}
+\begin{frame}{The setup}
+  \placeholder{Reserves / Sailors statistics, B = 5, cost = page I/Os, the query \src{L15}{3--4}}
+\end{frame}
+
+\begin{frame}{Formula cheat sheet}
+  \placeholder{PNLJ, BNLJ, external sort passes, on-the-fly selection (from Week 4)}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Plans 1--3: selection pushdown}
+\begin{frame}{Plan 1: the naive plan}
+  \placeholder{Plan tree + cost \src{L15}{4--6}}
+\end{frame}
+\begin{frame}{Plan 2: push the selection on the outer}
+  \placeholder{Plan tree + cost \src{L15}{7--9}}
+\end{frame}
+\begin{frame}{Plan 3: push the selection on the inner}
+  \placeholder{Plan tree + cost; why nothing changes \src{L15}{10--12}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Plans 4--6: join order \& materialisation}
+\begin{frame}{Plan 4: change the join order}
+  \placeholder{Plan tree + cost \src{L15}{14--16}}
+\end{frame}
+\begin{frame}{Plan 5: materialise the inner input}
+  \placeholder{Plan tree + cost \src{L15}{18--20}}
+\end{frame}
+\begin{frame}{Plan 6: flip the order again, with materialisation}
+  \placeholder{Plan tree + cost \src{L15}{21--23}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Plans 7--8: other join algorithms}
+\begin{frame}{Plan 7: sort-merge join}
+  \placeholder{Plan tree + pass calculation \src{L15}{25--28}}
+\end{frame}
+\begin{frame}{Plan 8: block nested loops join}
+  \placeholder{Plan tree + cost \src{L15}{30--32}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{Plans 9--10: projection \& indexes}
+\begin{frame}{Plan 9: projection pushdown + reordering}
+  \placeholder{Plan tree + cost; the no-index lower bound \src{L15}{34--37}}
+\end{frame}
+\begin{frame}{Plan 10: index nested loops join}
+  \placeholder{Plan tree + cost \src{L15}{39--42}}
+\end{frame}
+
+% ---------------------------------------------------------------------
+\subsection{The entire story}
+\begin{frame}{The entire story}
+  \placeholder{Scoreboard table of all 10 plans \src{L15}{43}}
+\end{frame}
+\begin{frame}{Meta-lessons}
+  \placeholder{500$\times$ gap; three kinds of moves; moves interact; heuristics usually good}
+\end{frame}

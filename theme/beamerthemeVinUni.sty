@@ -1,0 +1,284 @@
+% =====================================================================
+%  beamerthemeVinUni.sty — VinUniversity-style Beamer theme
+%  Colours, fonts and slide geometry follow the official VinUni
+%  PowerPoint template (navy #1F4983 + red #C72027, Montserrat/Lato,
+%  red title triangle, red footer rule, campus-photo title slide).
+%
+%  Usage (in a week folder):
+%     \makeatletter\def\input@path{{../theme/}}\makeatother
+%     \documentclass[aspectratio=169,11pt]{beamer}
+%     \usetheme{VinUni}
+% =====================================================================
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{beamerthemeVinUni}[2026/11/23 VinUni Beamer theme v1.0]
+
+\mode<presentation>
+
+% ---------------------------------------------------------------------
+% Packages
+% ---------------------------------------------------------------------
+\RequirePackage[T1]{fontenc}
+\RequirePackage[defaultsans]{lato}          % body text
+\RequirePackage[varqu,varl]{zi4}            % monospace (Inconsolata)
+\RequirePackage{amsmath,amssymb}
+\RequirePackage{booktabs}
+\RequirePackage{tikz}
+\usetikzlibrary{calc,positioning,arrows.meta,shapes.geometric,fit,backgrounds}
+\RequirePackage[most]{tcolorbox}
+\RequirePackage{fontawesome5}
+\RequirePackage{listings}
+
+% Graphics search path: the week's own figures/, then the shared assets.
+\graphicspath{{figures/}{../theme/assets/}}
+
+% ---------------------------------------------------------------------
+% Colour palette (from the VinUni template)
+% ---------------------------------------------------------------------
+\definecolor{vinuNavy}{HTML}{1F4983}     % main text / structure
+\definecolor{vinuRed}{HTML}{C72027}      % titles, accents, rules
+\definecolor{vinuDeepRed}{HTML}{C00000}
+\definecolor{vinuIndigo}{HTML}{2B3664}   % darker navy (title-photo panels)
+\definecolor{vinuGold}{HTML}{D2AE00}     % secondary accent ("Extra" boxes)
+\definecolor{vinuGray}{HTML}{888888}     % footer / captions
+\definecolor{vinuLightGray}{HTML}{F2F2F2}
+\definecolor{vinuPink}{HTML}{D2AEBD}
+
+% ---------------------------------------------------------------------
+% Fonts
+% ---------------------------------------------------------------------
+\newcommand{\vinuHeadFont}{\fontfamily{Montserrat-LF}\fontseries{m}\selectfont}
+\newcommand{\vinuHeadFontSB}{\fontfamily{Montserrat-LF}\fontseries{sb}\selectfont}
+
+\setbeamerfont{frametitle}{size=\Large}
+\setbeamerfont{framesubtitle}{size=\small}
+\setbeamerfont{footline}{size=\tiny}
+\setbeamerfont{block title}{size=\normalsize}
+\setbeamerfont{caption}{size=\scriptsize}
+
+% ---------------------------------------------------------------------
+% Colours of beamer elements
+% ---------------------------------------------------------------------
+\setbeamercolor{normal text}{fg=vinuNavy,bg=white}
+\setbeamercolor{structure}{fg=vinuNavy}
+\setbeamercolor{alerted text}{fg=vinuRed}
+\setbeamercolor{example text}{fg=vinuGold!80!black}
+\setbeamercolor{frametitle}{fg=vinuRed}
+\setbeamercolor{framesubtitle}{fg=vinuNavy!80}
+\setbeamercolor{block title}{fg=white,bg=vinuNavy}
+\setbeamercolor{block body}{fg=vinuNavy,bg=vinuNavy!6}
+\setbeamercolor{block title alerted}{fg=white,bg=vinuRed}
+\setbeamercolor{block body alerted}{fg=vinuNavy,bg=vinuRed!6}
+\setbeamercolor{block title example}{fg=white,bg=vinuGold!90!black}
+\setbeamercolor{block body example}{fg=vinuNavy,bg=vinuGold!8}
+\setbeamercolor{caption name}{fg=vinuRed}
+\setbeamercolor{section in toc}{fg=vinuNavy}
+\setbeamercolor{subsection in toc}{fg=vinuNavy}
+
+% ---------------------------------------------------------------------
+% Geometry & general templates
+% ---------------------------------------------------------------------
+\setbeamersize{text margin left=11mm,text margin right=10mm}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{blocks}[rounded][shadow=false]
+\setbeamertemplate{caption}[numbered]
+\setbeamertemplate{headline}{}
+
+% Footer text (override with \vinuFooter{...} in main.tex)
+\newcommand{\vinu@footer}{\insertshorttitle}
+\newcommand{\vinuFooter}[1]{\renewcommand{\vinu@footer}{#1}}
+
+% Course code shown in the red box on the title slide
+\newcommand{\vinu@course}{VINUNIVERSITY}
+\newcommand{\vinuCourse}[1]{\renewcommand{\vinu@course}{#1}}
+
+% --- Frame title: red triangle at the left edge + red Montserrat title
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[vinuRed] ($(current page.north west)+(0,-2.8mm)$)
+      -- ++(6.2mm,-5.2mm) -- ++(-6.2mm,-5.2mm) -- cycle;
+  \end{tikzpicture}%
+  \begin{beamercolorbox}[wd=\paperwidth,leftskip=10mm,rightskip=8mm]{frametitle}%
+    % the strut fixes the first baseline 10mm below the page top, so the
+    % title always lines up with the triangle (multi-line titles grow down)
+    \usebeamerfont{frametitle}\vinuHeadFont\rule{0pt}{10mm}\insertframetitle%
+    \ifx\insertframesubtitle\@empty\else%
+      \par\vspace{0.6mm}{\usebeamerfont{framesubtitle}\usebeamercolor[fg]{framesubtitle}\vinuHeadFont\insertframesubtitle}%
+    \fi
+  \end{beamercolorbox}%
+  \vspace{3mm}%
+}
+
+% --- Footer: thin red rule, small grey course text, frame number
+\setbeamertemplate{footline}{%
+  \begin{tikzpicture}
+    \useasboundingbox (0,0) rectangle (\paperwidth,7.5mm);
+    \draw[vinuRed,line width=0.6pt] (6mm,5.6mm) -- ($(\paperwidth,5.6mm)-(6mm,0)$);
+    \node[anchor=west,inner sep=0,text=vinuGray,font=\usebeamerfont{footline}]
+      at (6.5mm,3mm) {\vinu@footer};
+    \node[anchor=east,inner sep=0,text=vinuGray,font=\usebeamerfont{footline}]
+      at ($(\paperwidth,3mm)-(6.5mm,0)$) {\insertframenumber};
+  \end{tikzpicture}%
+}
+
+% --- Lists
+\setbeamertemplate{itemize item}{\raisebox{0.15ex}{\textcolor{vinuRed}{\scriptsize$\blacktriangleright$}}}
+\setbeamertemplate{itemize subitem}{\textcolor{vinuNavy}{\textendash}}
+\setbeamertemplate{itemize subsubitem}{\textcolor{vinuGray}{\tiny$\bullet$}}
+\setbeamertemplate{enumerate item}{\textcolor{vinuRed}{\vinuHeadFontSB\insertenumlabel.}}
+\setbeamertemplate{enumerate subitem}{\textcolor{vinuNavy}{\insertenumlabel.\insertsubenumlabel}}
+\setlength{\leftmargini}{1.4em}
+
+% --- Table of contents: red numbered squares, triangle sub-items
+\setbeamertemplate{section in toc}{%
+  \leavevmode\raisebox{0.05ex}{\colorbox{vinuRed}{\makebox[0.9em]{\color{white}\vinuHeadFontSB\footnotesize\inserttocsectionnumber}}}%
+  \hspace{0.6em}{\usebeamercolor[fg]{section in toc}\vinuHeadFont\inserttocsection}\par}
+\setbeamertemplate{subsection in toc}{%
+  \leavevmode\hspace*{2.1em}\textcolor{vinuRed}{\tiny$\blacktriangleright$}\hspace{0.4em}%
+  {\usebeamercolor[fg]{subsection in toc}\small\inserttocsubsection}\par}
+\setbeamertemplate{section in toc shaded}[default][35]
+\setbeamertemplate{subsection in toc shaded}[default][35]
+
+% ---------------------------------------------------------------------
+% Title slide  ->  \vinuTitleFrame
+% ---------------------------------------------------------------------
+\newcommand{\vinuTitleFrame}{%
+  {\setbeamertemplate{background canvas}{%
+     \includegraphics[width=\paperwidth,height=\paperheight]{vinuni-title-bg}}%
+   \setbeamertemplate{footline}{}%
+   \begin{frame}[plain,c,noframenumbering]
+     \begin{tikzpicture}[remember picture,overlay]
+       % red course-code box (as on the VinUni template) ...
+       \node[anchor=north west,fill=vinuRed,text=white,inner xsep=3mm,inner ysep=2mm,
+             font=\vinuHeadFontSB\small] (course)
+         at ($(current page.north west)+(14mm,-9mm)$) {\vinu@course};
+       % ... and a translucent panel that keeps white text readable on the photo
+       \node[anchor=north west,fill=vinuIndigo,fill opacity=0.6,text opacity=1,
+             text=white,text width=88mm,inner xsep=3mm,inner ysep=3.5mm]
+         at (course.south west) {%
+           \raggedright\hyphenpenalty=10000\exhyphenpenalty=10000
+           {\vinuHeadFontSB\Large\inserttitle\par}
+           \ifx\insertsubtitle\@empty\else
+             \vspace{1.5mm}{\vinuHeadFont\normalsize\insertsubtitle\par}\fi
+           \vspace{3mm}{\color{white!85}\rule{20mm}{0.6pt}\par}
+           \vspace{1.5mm}{\footnotesize\insertauthor\par}
+           {\scriptsize\color{white!85}\insertinstitute\par}
+           \vspace{0.5mm}{\scriptsize\color{white!85}\insertdate\par}};
+     \end{tikzpicture}
+   \end{frame}}%
+}
+
+% ---------------------------------------------------------------------
+% Section divider (automatic at every \section)
+%   \sectionsubtitle{...} *before* \section adds a small subtitle line
+% ---------------------------------------------------------------------
+\newcommand{\vinu@secsub}{}
+\newcommand{\sectionsubtitle}[1]{\gdef\vinu@secsub{#1}}
+\newif\ifvinuSectionToc \vinuSectionToctrue   % list subsections on divider
+
+\newcommand{\vinuSectionFrame}{%
+  {\setbeamercolor{background canvas}{bg=vinuNavy}%
+   \setbeamercolor{subsection in toc}{fg=white}%
+   \setbeamertemplate{footline}{}%
+   \begin{frame}[plain,c,noframenumbering]
+     \begin{tikzpicture}[remember picture,overlay]
+       % geometric accents echoing the title photo
+       \fill[vinuIndigo] (current page.north east) -- ++(-45mm,0) -- ($(current page.south east)+(0,0)$) -- cycle;
+       \fill[vinuRed] (current page.north west) -- ++(16mm,-16mm) -- ++(-16mm,-16mm) -- cycle;
+       \node[anchor=south east,inner sep=0] at ($(current page.south east)+(-7mm,6mm)$)
+         {\includegraphics[height=6mm]{vinuni-logo-horizontal-white}};
+     \end{tikzpicture}%
+     \vspace*{4mm}
+     \hspace*{12mm}\begin{minipage}{0.70\paperwidth}
+       {\colorbox{vinuRed}{\color{white}\vinuHeadFontSB\footnotesize\ PART \insertsectionnumber\ }\par}
+       \vspace{3mm}
+       {\color{white}\vinuHeadFontSB\LARGE\insertsectionhead\par}
+       \ifx\vinu@secsub\@empty\else
+         \vspace{1.5mm}{\color{white!80}\vinuHeadFont\normalsize\vinu@secsub\par}\fi
+       \vspace{3mm}{\color{vinuRed}\rule{25mm}{1.2pt}\par}\vspace{3mm}
+       \ifvinuSectionToc
+         {\color{white}\small
+          \tableofcontents[currentsection,hideothersubsections,sectionstyle=hide/hide,subsectionstyle=show/show/hide]}
+       \fi
+     \end{minipage}
+   \end{frame}}%
+  \gdef\vinu@secsub{}%
+}
+\AtBeginSection[]{\vinuSectionFrame}
+
+% ---------------------------------------------------------------------
+% Closing slide  ->  \vinuClosingFrame{Thank you!}{Questions?}
+% ---------------------------------------------------------------------
+\newcommand{\vinuClosingFrame}[2]{%
+  {\setbeamertemplate{background canvas}{%
+     \includegraphics[width=\paperwidth,height=\paperheight]{vinuni-closing-bg}}%
+   \setbeamertemplate{footline}{}%
+   \begin{frame}[plain,c,noframenumbering]
+     \begin{tikzpicture}[remember picture,overlay]
+       \fill[vinuNavy,opacity=0.85] ($(current page.south east)+(-62mm,6mm)$) rectangle ++(56mm,34mm);
+       \node[anchor=north,inner sep=0] at ($(current page.south east)+(-34mm,36mm)$)
+         {\includegraphics[height=10mm]{vinuni-logo-stacked-white}};
+       \node[anchor=north,text=white,font=\vinuHeadFontSB\Large] at ($(current page.south east)+(-34mm,23mm)$) {#1};
+       \node[anchor=north,text=white!85,font=\vinuHeadFont\small] at ($(current page.south east)+(-34mm,15mm)$) {#2};
+       \fill[vinuRed] (current page.north west) -- ++(12mm,-12mm) -- ++(-12mm,-12mm) -- cycle;
+     \end{tikzpicture}
+   \end{frame}}%
+}
+
+% ---------------------------------------------------------------------
+% Content boxes (mirror the markers used in the lesson plans)
+%   keybox    — key idea / definition              (navy)
+%   notebox   — "Precision note" / pitfall          (red)
+%   extrabox  — "Extra" own example / analogy       (gold)
+% ---------------------------------------------------------------------
+\tcbset{vinubase/.style={enhanced,arc=1.5mm,boxrule=0pt,left=2mm,right=2mm,top=1mm,bottom=1mm,
+  fonttitle=\vinuHeadFontSB\footnotesize,coltitle=white,fontupper=\small,colupper=vinuNavy,
+  attach boxed title to top left={xshift=2mm,yshift=-2mm},boxed title style={arc=1mm,boxrule=0pt}}}
+\newtcolorbox{keybox}[1][Key idea]{vinubase,colback=vinuNavy!6,colframe=vinuNavy,
+  boxed title style={colback=vinuNavy},title={\faKey\ #1},borderline west={1.2mm}{0pt}{vinuNavy},top=3mm}
+\newtcolorbox{notebox}[1][Precision note]{vinubase,colback=vinuRed!6,colframe=vinuRed,
+  boxed title style={colback=vinuRed},title={\faExclamationTriangle\ #1},borderline west={1.2mm}{0pt}{vinuRed},top=3mm}
+\newtcolorbox{extrabox}[1][Extra]{vinubase,colback=vinuGold!9,colframe=vinuGold,
+  boxed title style={colback=vinuGold!90!black},title={\faPuzzlePiece\ #1},borderline west={1.2mm}{0pt}{vinuGold},top=3mm}
+
+% ---------------------------------------------------------------------
+% Placeholders for the bootstrapping phase
+%   \placeholder{what goes here}       dashed TODO box
+%   \figplaceholder[w][h]{label}       dashed figure box
+%   \src{L13}{3}                       small grey source tag "[L13, s.3]"
+% ---------------------------------------------------------------------
+\newcommand{\placeholder}[1]{%
+  \begin{tcolorbox}[enhanced,frame hidden,colback=vinuLightGray,arc=1mm,
+      borderline={0.5pt}{0pt}{vinuGray,dashed},left=2mm,right=2mm,top=0.8mm,bottom=0.8mm,
+      fontupper=\footnotesize\color{vinuGray}\raggedright]
+    \faPencil*\ \textbf{TODO}\quad #1
+  \end{tcolorbox}}
+\newcommand{\figplaceholder}[3][\linewidth]{%
+  \tikz{\node[draw=vinuGray,dashed,fill=vinuLightGray,minimum width=#1,minimum height=#2,
+    align=center,text=vinuGray,font=\footnotesize]{\faImage[regular]\\[1mm]#3};}}
+\newcommand{\src}[2]{{\textcolor{vinuGray}{\scriptsize[#1, s.#2]}}}
+\newcommand{\hl}[1]{\textcolor{vinuRed}{\textbf{#1}}}
+
+% ---------------------------------------------------------------------
+% Relational-algebra shorthands
+% ---------------------------------------------------------------------
+\newcommand{\sel}[1]{\sigma_{#1}}
+\newcommand{\proj}[1]{\pi_{#1}}
+\newcommand{\njoin}[1][]{\mathbin{\bowtie_{#1}}}
+\newcommand{\cross}{\mathbin{\times}}
+
+% ---------------------------------------------------------------------
+% Code listings: SQL and pseudo-code
+% ---------------------------------------------------------------------
+\lstdefinestyle{vinu}{basicstyle=\ttfamily\footnotesize\color{vinuNavy},
+  keywordstyle=\color{vinuRed}\bfseries,commentstyle=\color{vinuGray}\itshape,
+  stringstyle=\color{vinuGold!70!black},numberstyle=\tiny\color{vinuGray},
+  frame=leftline,framerule=1.2pt,rulecolor=\color{vinuRed},xleftmargin=3mm,
+  backgroundcolor=\color{vinuLightGray},columns=fullflexible,keepspaces=true,
+  showstringspaces=false,upquote=true,aboveskip=1mm,belowskip=1mm}
+\lstdefinelanguage{pseudo}{morekeywords={function,Function,while,do,if,else,return,for,in,
+  open,next,close,EOF,emit},sensitive=true,morecomment=[l]{//}}
+\lstset{style=vinu,language=SQL}
+
+\mode<all>
+\endinput
