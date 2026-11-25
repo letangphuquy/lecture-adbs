@@ -1,68 +1,821 @@
 % =====================================================================
 %  3. L15 — Query Optimisation: Plan Space Example
 %     (Lesson plan §3  •  Presentation flow: Act 3, ~25 min)
-%  Tip: keep a running "scoreboard" of I/O costs on each plan slide.
+%  Follows the slide flow of Edinburgh ADBS Lecture #15 [L15, s.n].
+%  Our additions: formula bullets (\fitem), "Our explanation" boxes,
+%  index reminders and what-if analyses.
+% =====================================================================
+
+% Link to the in-class interactive widget.
+\providecommand{\LfifteenWidgetURL}{https://letangphuquy.github.io/query-plan-visualizer}
+
+% ---------------------------------------------------------------------
+% Plan-tree drawing kit (TikZ trees, root on top, data flows upward)
+% ---------------------------------------------------------------------
+\tikzset{
+  plan/.style={every node/.style={font=\footnotesize,text=vinuNavy,align=center},
+    level distance=11mm, sibling distance=31mm,
+    edge from parent/.style={draw=vinuNavy!60,thick,{Stealth[length=1.4mm]}-},
+    edge from parent path={(\tikzparentnode.south) -- (\tikzchildnode.north)}},
+  op/.style={inner sep=1pt},
+  jn/.style={inner sep=1pt},
+  tb/.style={inner sep=1pt},
+  mat/.style={draw=vinuGold!90!black,dashed,fill=vinuGold!12,rounded corners=0.8mm,inner sep=1.5pt},
+  chg/.style={},                                   % "changed in this plan"
+  hl/.style={chg/.style={text=vinuRed,font=\footnotesize\bfseries}},
+  fly/.style={label={[font=\tiny,text=vinuGray,inner sep=1pt]east:on-the-fly}},
+  sz/.style={label={[font=\tiny,text=vinuRed,inner sep=1pt,align=left]east:#1}},
+  small/.style={level distance=7.9mm, sibling distance=29mm},   % compact, for side-by-side
+}
+% operator glyphs are drawn larger than their subscripts
+\newcommand{\bigop}[1]{\text{\Large$#1$}}
+\newcommand{\JN}[1]{$\bigop{\bowtie}_{\mathit{sid}=\mathit{sid}}$\\[-1.5pt]{\tiny\bfseries #1}}
+\newcommand{\TB}[2]{#1\\[-1.5pt]{\tiny\bfseries #2}}
+\newcommand{\SEL}[1]{$\bigop{\sigma}_{#1}$}
+\newcommand{\PRJ}[1]{$\bigop{\pi}_{#1}$}
+\newcommand{\MAT}{{\tiny\bfseries MATERIALISE T1}}
+\newcommand{\drawplan}[2][]{\begin{tikzpicture}[plan,#1]#2\end{tikzpicture}}
+\newcommand{\planbox}[3][]{%  [tikz opts]{height}{plan}
+  \begin{tcolorbox}[enhanced,colback=vinuLightGray,frame hidden,arc=1mm,halign=center,
+      valign=center,height=#2,left=1mm,right=1mm,top=1mm,bottom=1mm]\drawplan[#1]{#3}\end{tcolorbox}}
+\newcommand{\cost}[1]{{\color{vinuRed}\vinuHeadFontSB #1}}
+% Formula bullet: first bullet of the first slide of each series
+\newcommand{\fitem}[2]{\item[\textcolor{vinuRed}{\small\faCalculator}]
+  {\setlength{\fboxsep}{1.5pt}\colorbox{vinuRed!10}{\textbf{Formula}}}~#1~#2}
+
+% ---- the plans -------------------------------------------------------
+\newcommand{\PlanOne}{%
+ \node[op,fly]{\PRJ{\mathit{sname}}}
+  child{node[op,fly]{\SEL{\mathit{bid}=100}}
+  child{node[op,fly]{\SEL{\mathit{rating}>5}}
+  child{node[jn]{\JN{PAGE NESTED LOOPS}}
+    child{node[tb]{\TB{Sailors}{SCAN}}}
+    child{node[tb]{\TB{Reserves}{SCAN}}}}}};}
+\newcommand{\PlanTwo}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[op]{\SEL{\mathit{bid}=100}}
+  child{node[jn]{\JN{PAGE NESTED LOOPS}}
+    child{node[op,chg]{\SEL{\mathit{rating}>5}} child{node[tb]{\TB{Sailors}{SCAN}}}}
+    child{node[tb]{\TB{Reserves}{SCAN}}}}};}
+\newcommand{\PlanThree}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[jn]{\JN{PAGE NESTED LOOPS}}
+    child{node[op]{\SEL{\mathit{rating}>5}} child{node[tb]{\TB{Sailors}{SCAN}}}}
+    child{node[op,chg]{\SEL{\mathit{bid}=100}} child{node[tb]{\TB{Reserves}{SCAN}}}}};}
+\newcommand{\PlanFour}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[jn]{\JN{PAGE NESTED LOOPS}}
+    child{node[op,chg]{\SEL{\mathit{bid}=100}} child{node[tb,chg]{\TB{Reserves}{SCAN}}}}
+    child{node[op]{\SEL{\mathit{rating}>5}} child{node[tb]{\TB{Sailors}{SCAN}}}}};}
+\newcommand{\PlanFive}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[jn]{\JN{PAGE NESTED LOOPS}}
+    child{node[op]{\SEL{\mathit{bid}=100}} child{node[tb]{\TB{Reserves}{SCAN}}}}
+    child{node[mat,chg]{\MAT} child{node[op]{\SEL{\mathit{rating}>5}} child{node[tb]{\TB{Sailors}{SCAN}}}}}};}
+\newcommand{\PlanSix}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[jn]{\JN{PAGE NESTED LOOPS}}
+    child{node[op,chg]{\SEL{\mathit{rating}>5}} child{node[tb,chg]{\TB{Sailors}{SCAN}}}}
+    child{node[mat]{\MAT} child{node[op,chg]{\SEL{\mathit{bid}=100}} child{node[tb,chg]{\TB{Reserves}{SCAN}}}}}};}
+\newcommand{\PlanSeven}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[jn,chg]{\JN{SORT-MERGE}}
+    child{node[op]{\SEL{\mathit{rating}>5}} child{node[tb]{\TB{Sailors}{SCAN}}}}
+    child{node[op]{\SEL{\mathit{bid}=100}} child{node[tb]{\TB{Reserves}{SCAN}}}}};}
+\newcommand{\PlanEight}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[jn,chg]{\JN{BLOCK NESTED LOOPS}}
+    child{node[op]{\SEL{\mathit{rating}>5}} child{node[tb]{\TB{Sailors}{SCAN}}}}
+    child{node[mat]{\MAT} child{node[op]{\SEL{\mathit{bid}=100}} child{node[tb]{\TB{Reserves}{SCAN}}}}}};}
+\newcommand{\PlanEightP}{%  projection cascade (s.34-35)
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[jn]{\JN{BLOCK NESTED LOOPS}}
+    child{node[op,chg]{\PRJ{\mathit{sid},\mathit{sname}}}
+      child{node[op]{\SEL{\mathit{rating}>5}} child{node[tb]{\TB{Sailors}{SCAN}}}}}
+    child{node[mat]{\MAT}
+      child{node[op,chg,sz={1 page\\(4 B/tuple)}]{\PRJ{\mathit{sid}}}
+      child{node[op,sz={10 pages\\(40 B/tuple)}]{\SEL{\mathit{bid}=100}}
+      child{node[tb,sz={1000 pages}]{\TB{Reserves}{SCAN}}}}}}};}
+\newcommand{\PlanNine}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[jn]{\JN{BLOCK NESTED LOOPS}}
+    child{node[op,chg]{\PRJ{\mathit{sid}}}
+      child{node[op,chg]{\SEL{\mathit{bid}=100}} child{node[tb,chg]{\TB{Reserves}{SCAN}}}}}
+    child{node[op]{\PRJ{\mathit{sid},\mathit{sname}}}
+      child{node[op]{\SEL{\mathit{rating}>5}} child{node[tb]{\TB{Sailors}{SCAN}}}}}};}
+\newcommand{\PlanTen}{%
+ \node[op]{\PRJ{\mathit{sname}}}
+  child{node[op,chg]{\SEL{\mathit{rating}>5}}
+  child{node[jn,chg]{\JN{INDEX NESTED LOOPS}}
+    child{node[op]{\SEL{\mathit{bid}=100}} child{node[tb,chg]{\TB{Reserves}{INDEX SCAN}}}}
+    child{node[tb,chg]{\TB{Sailors}{INDEX SCAN}}}}};}
+
+% Two plans side by side: {title}{left plan}{left cost}{right plan}{right cost}{bottom text}
+\newcommand{\compareplans}[6]{%
+\begin{frame}{#1}
+  \begin{columns}[T]
+    \column{0.43\textwidth}
+      \planbox[small]{41mm}{#2}\centering\cost{#3}
+    \column{0.06\textwidth}
+      \centering\vspace*{17mm}{\color{vinuRed}\Large\faArrowRight}
+    \column{0.43\textwidth}
+      \planbox[small,hl]{41mm}{#4}\centering\cost{#5}
+  \end{columns}
+  \vspace{1mm}{\footnotesize #6}
+\end{frame}}
+
+% Running scoreboard: \soFar{k}{next step}
+\newcommand{\sfRow}[3]{\ifnum#1<\sfK\item #2\hfill #3\fi\ifnum#1=\sfK\item\hl{#2}\hfill\hl{#3}\fi}
+\newcommand{\soFar}[2]{%
+\begin{frame}{So far, we've tried \dots}
+  \def\sfK{#1}
+  \centering\begin{minipage}{0.72\textwidth}
+  \begin{itemize}\setlength{\itemsep}{0.3pt}
+    \sfRow{1}{Basic page nested loops}{500,500}
+    \sfRow{2}{Selection pushdown on left}{250,500}
+    \sfRow{3}{More selection pushdown on right}{250,500}
+    \sfRow{4}{Join ordering}{6,000}
+    \sfRow{5}{Materialising inner loop}{4,250}
+    \sfRow{6}{Join ordering again with materialisation}{4,010}
+    \sfRow{7}{Sort-merge join}{3,540}
+    \sfRow{8}{Block nested loops join}{2,350}
+    \sfRow{9}{Projection cascade, plus reordering again}{1,500}
+    \sfRow{10}{Index nested loops join}{1,010}
+  \end{itemize}
+  \vspace{2mm}\textbf{Next:} #2
+  \end{minipage}
+\end{frame}}
+
 % =====================================================================
 \sectionsubtitle{Lecture 15 \textbullet\ Pricing ten plans for one query}
 \section{Plan Space: A Worked Example}
 
 % ---------------------------------------------------------------------
 \subsection{Setup: schema, statistics, cost model}
-\begin{frame}{The setup}
-  \placeholder{Reserves / Sailors statistics, B = 5, cost = page I/Os, the query \src{L15}{3--4}}
+
+\begin{frame}{About this lecture: source and disclaimer}
+  \begin{keybox}[Source]
+    This part closely follows the example and slide flow of\\
+    \textbf{Lecture \#15 --- Query Optimisation: Plan Space Example}, \emph{Advanced Database Systems},
+    Spring 2026, Milos Nikolic, School of Informatics, \textbf{University of Edinburgh}.\\
+    It in turn follows R.~Ramakrishnan \& J.~Gehrke, \emph{Database Management Systems}, 3rd ed., Ch.~15.
+  \end{keybox}
+  \begin{itemize}\small
+    \item The example database, query, plans and I/O numbers are theirs, redrawn here; \src{L15}{n} = their slide $n$.
+    \item Added by us: \textcolor{vinuRed}{\faCalculator}~formula bullets citing earlier lectures (L08, L09, L11, L12),
+          \textcolor{vinuGold!90!black}{\faPuzzlePiece}~explanations / what-ifs, and \textcolor{vinuRed}{\faExclamationTriangle}~precision notes.
+    \item Adapted for teaching COMP5330 at VinUniversity only; any errors introduced in the adaptation are ours.
+  \end{itemize}
 \end{frame}
 
-\begin{frame}{Formula cheat sheet}
-  \placeholder{PNLJ, BNLJ, external sort passes, on-the-fly selection (from Week 4)}
+\begin{frame}{Two ways to work through this example}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+      \begin{keybox}[In class]
+        \faMousePointer\ \textbf{Play with this interactive widget}: pick the join order, push selections and
+        projections, materialise, switch join algorithms, and watch the I/O cost change.\par\vspace{2mm}
+        {\centering
+        \href{\LfifteenWidgetURL}{\colorbox{vinuRed}{\color{white}\vinuHeadFontSB\small\ \faExternalLink*\ Open the widget\ }}\par
+        \vspace{1mm}{\tiny\color{vinuGray}\expandafter\url\expandafter{\LfifteenWidgetURL}}\par}
+      \end{keybox}
+    \column{0.48\textwidth}
+      \begin{extrabox}[After class]
+        \faBookOpen\ \textbf{Or read the detailed examples below}: the next slides walk through all ten plans of
+        \src{L15}{3--43} step by step, with the cost formula behind every decision.\\[2mm]
+        Use them to revise: every \textcolor{vinuRed}{???} on a slide is worked out on that slide.
+      \end{extrabox}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Example database \src{L15}{3}}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+      \textbf{Reserves}(\underline{sid, bid, day}, rname)
+      \begin{itemize}\small
+        \item 1000 pages, 100 tuples per page $\Rightarrow$ 100,000 tuples
+        \item Each tuple is 40 bytes long
+        \item 100 boats, each equally likely
+      \end{itemize}
+    \column{0.5\textwidth}
+      \textbf{Sailors}(\underline{sid}, sname, rating, age)
+      \begin{itemize}\small
+        \item 500 pages, 80 tuples per page $\Rightarrow$ 40,000 tuples
+        \item Each tuple is 50 bytes long
+        \item 10 different ratings, each equally likely
+      \end{itemize}
+  \end{columns}
+  \vspace{2mm}
+  \begin{itemize}
+    \item We have \hl{B = 5} buffer pages to use for joins
+    \item Remember: \hl{just counting page I/Os} (CPU and writing the final output are ignored)
+  \end{itemize}
+  \begin{extrabox}[Derived numbers we will reuse]
+    $\sel{\mathit{bid}=100}$ keeps $1/100$ of Reserves $\to$ 10 pages' worth \quad
+    $\sel{\mathit{rating}>5}$ keeps $5/10$ of Sailors $\to$ 250 pages' worth \quad
+    page size $\approx 100 \times 40 = 80 \times 50 = 4000$ B
+  \end{extrabox}
+\end{frame}
+
+\begin{frame}{Reminder: notation and cost formulas from Week 4}
+  \small
+  Notation: $[X]$ = number of \textbf{pages} of $X$, $|X|$ = number of \textbf{tuples} of $X$;
+  in a join the \textbf{left} input is the \textbf{outer}. (L12 writes $M=[\text{outer}]$, $m=|\text{outer}|$, $N=[\text{inner}]$.)
+  \vspace{1mm}
+  \begin{center}
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Operator} & \textbf{I/O cost} & \textbf{Source} \\
+    \midrule
+    Page nested loops join   & $M + M \cdot N$                          & \src{L12}{10} \\
+    Block nested loops join  & $M + \lceil M/(B-2) \rceil \cdot N$       & \src{L12}{13} \\
+    Index nested loops join  & $M + m \cdot (\text{cost to find matching inner tuples})$ & \src{L12}{15} \\
+    External sort            & $2N \cdot \#\text{passes}$, \ $\#\text{passes} = 1 + \lceil \log_{B-1} \lceil N/B \rceil \rceil$ & \src{L11}{12} \\
+    Sort-merge join          & sort(outer) + sort(inner) + $(M + N)$     & \src{L12}{32} \\
+    Selection on the fly     & 0 extra I/O (but the scan below still reads every page) & \src{L13}{6} \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
 \end{frame}
 
 % ---------------------------------------------------------------------
 \subsection{Plans 1--3: selection pushdown}
-\begin{frame}{Plan 1: the naive plan}
-  \placeholder{Plan tree + cost \src{L15}{4--6}}
+
+\begin{frame}[fragile]{Query plan 1 \src{L15}{4}}
+  \begin{columns}[c]
+    \column{0.5\textwidth}
+\begin{lstlisting}
+SELECT S.sname
+FROM   Reserves R, Sailors S
+WHERE  R.sid = S.sid
+  AND  R.bid = 100
+  AND  S.rating > 5
+\end{lstlisting}
+      \vspace{2mm}
+      Here's a reasonable query plan: one join, every selection and the projection applied
+      \emph{on the fly} at the top.
+    \column{0.42\textwidth}
+      \planbox{56mm}{\PlanOne}
+  \end{columns}
 \end{frame}
-\begin{frame}{Plan 2: push the selection on the outer}
-  \placeholder{Plan tree + cost \src{L15}{7--9}}
+
+\begin{frame}{Query plan 1 cost \src{L15}{5}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \fitem{(page NLJ)}{\src{L12}{10}}: $M + M\cdot N$, \\ here: $[S] + [S]\cdot[R]$
+        \item Scan Sailors: \textbf{500 I/Os}
+        \item For each page of Sailors \\ scan Reserves: \textbf{1000 I/Os}
+        \item Total $= 500 + 500 \cdot 1000$\\ \phantom{Total} $=$ \cost{500,500 I/Os}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox{56mm}{\PlanOne}
+  \end{columns}
 \end{frame}
-\begin{frame}{Plan 3: push the selection on the inner}
-  \placeholder{Plan tree + cost; why nothing changes \src{L15}{10--12}}
+
+\begin{frame}{Query plan 1 cost analysis \src{L15}{6}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \item Cost: \cost{500,500 I/Os}
+        \item \textbf{By no means a terrible plan!}
+        \item Misses several opportunities
+        \begin{itemize}
+          \item Selections could be ``pushed'' down
+          \item No use of indexes
+        \end{itemize}
+        \item Goal of optimisation: find \alert{faster plans} that compute the \alert{same answer}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox{56mm}{\PlanOne}
+  \end{columns}
 \end{frame}
+
+\compareplans{Selection pushdown \src{L15}{7}}{\PlanOne}{500,500 I/Os}{\PlanTwo}{Cost?}{%
+  \begin{itemize}
+    \fitem{(PNLJ, outer filtered on the fly)}{\src{L12}{10}}: $[S] + [\sel{\mathit{rating}>5}(S)] \cdot [R]$ ---
+      the outer is still read in full once, but only its \emph{surviving} tuples drive the inner loop.
+  \end{itemize}}
+
+\begin{frame}{Query plan 2 cost \src{L15}{8}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \item Scan Sailors: \textbf{500 I/Os}
+        \item For each page of \emph{high-rated} Sailors\\ scan Reserves: \textbf{1000 I/Os}
+        \item Total $= 500 + \;???\; \cdot 1000$
+        \item Remember: 10 ratings, all equally likely\\
+              Total $= 500 + (500/2)\cdot 1000 =$ \cost{250,500 I/Os}
+      \end{itemize}
+      \begin{notebox}
+        The 250 ``pages'' are never written anywhere: they are page-sized groups of qualifying tuples streaming out of $\sigma$.
+      \end{notebox}
+    \column{0.42\textwidth}
+      \planbox[hl]{56mm}{\PlanTwo}
+  \end{columns}
+\end{frame}
+
+\compareplans{Decision 1 \src{L15}{9}}{\PlanOne}{500,500 I/Os}{\PlanTwo}{250,500 I/Os}{%
+  \textbf{Idea:} select \emph{before} joining $\Rightarrow$ fewer tuples enter the join $\Rightarrow$ fewer inner scans.
+  Pushing down on the \textbf{left (outer)} pays off because the outer size \emph{multiplies} the inner scan.}
+
+\compareplans{More selection pushdown \src{L15}{10}}{\PlanTwo}{250,500 I/Os}{\PlanThree}{Cost?}{%
+  Now also push $\sel{\mathit{bid}=100}$ below the join, onto the \textbf{right (inner)} input.}
+
+\begin{frame}{Query plan 3 cost \src{L15}{11}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \item Scan Sailors: \textbf{500 I/Os}
+        \item For each page of high-rated Sailors, read through the Reserves tuples that match
+        \item Total $= 500 + 250 \cdot \;???$
+        \item For each scan of Reserves, we filter \emph{on the fly}
+        \item \alert{Problem:} this does not actually save any I/Os --- to find matching Reserves tuples
+              we still scan all \textbf{1000} pages of Reserves each time
+        \item Total $= 500 + 250 \cdot 1000 =$ \cost{250,500 I/Os}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox[hl]{56mm}{\PlanThree}
+  \end{columns}
+\end{frame}
+
+\compareplans{Decision 2 \src{L15}{12}}{\PlanTwo}{250,500 I/Os}{\PlanThree}{250,500 I/Os}{%
+  A selection in the \textbf{inner loop} of a nested loops join \alert{does not save I/Os} (same as having it above):
+  I/O counts \emph{pages read}, and the filter runs only \emph{after} each Reserves page is read.}
+
+\soFar{3}{join ordering}
 
 % ---------------------------------------------------------------------
 \subsection{Plans 4--6: join order \& materialisation}
-\begin{frame}{Plan 4: change the join order}
-  \placeholder{Plan tree + cost \src{L15}{14--16}}
+
+\compareplans{Join ordering \src{L15}{14}}{\PlanThree}{250,500 I/Os}{\PlanFour}{Cost?}{%
+  \begin{itemize}
+    \fitem{(PNLJ, outer filtered on the fly)}{\src{L12}{10}}: swap the inputs, so now
+      $[R] + [\sel{\mathit{bid}=100}(R)] \cdot [S]$ \quad (Reserves outer, Sailors inner).
+  \end{itemize}}
+
+\begin{frame}{Query plan 4 cost \src{L15}{15}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \item Scan Reserves: \textbf{1000 I/Os}
+        \item For each page of Reserves for bid 100\\ scan Sailors: \textbf{500 I/Os}
+        \item Total $= 1000 + \;???\; \cdot 500$
+        \item Uniformly distributed across 100 boat values\\
+              Total $= 1000 + (1000/100) \cdot 500 =$ \cost{6000 I/Os}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox[hl]{56mm}{\PlanFour}
+  \end{columns}
 \end{frame}
-\begin{frame}{Plan 5: materialise the inner input}
-  \placeholder{Plan tree + cost \src{L15}{18--20}}
+
+\compareplans{Decision 3 \src{L15}{16}}{\PlanThree}{250,500 I/Os}{\PlanFour}{6000 I/Os}{%
+  \textbf{Order matters!} \#inner scans = \emph{filtered} outer size: Sailors outer $\to 250 \times 1000$;
+  Reserves outer $\to 10 \times 500$. Put the side that filters \textbf{more} (1000 $\to$ 10 pages) outside.}
+
+\soFar{4}{materialisation}
+
+\begin{frame}{Materialising inner loops \src{L15}{18}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \fitem{(PNLJ + materialised inner T1)}{\src{L12}{10}}: \\
+          $[\text{outer}] + [\text{inner}] + \underbrace{[T1]}_{\text{write}} + [\sigma(\text{outer})]\cdot[T1]$
+        \item If you recall, selection pushdown on the right doesn't help because it is done \emph{on the fly}
+        \item What if we \textbf{materialise} the result after the selection, \emph{once}, into a temp table T1?
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox{52mm}{\PlanFour}\centering\cost{6000 I/Os}
+  \end{columns}
 \end{frame}
-\begin{frame}{Plan 6: flip the order again, with materialisation}
-  \placeholder{Plan tree + cost \src{L15}{21--23}}
+
+\begin{frame}{Query plan 5 cost \src{L15}{19}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \item Scan Reserves: \textbf{1000 I/Os}
+        \item Scan Sailors: \textbf{500 I/Os}
+        \item Materialise temp table T1: \textbf{??? I/Os}
+        \item For each page of Reserves for bid 100\\ scan T1: \textbf{??? I/Os}
+        \item Total $= 1000 + 500 + \;???\; + 10 \cdot \;???$
+        \item Ratings 1 to 10 uniformly distributed\\
+              Total $= 1000 + 500 + 250 + 10 \cdot 250 =$ \cost{4250 I/Os}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox[hl]{60mm}{\PlanFive}
+  \end{columns}
 \end{frame}
+
+\compareplans{Decision 4 \src{L15}{20}}{\PlanFour}{6000 I/Os}{\PlanFive}{4250 I/Os}{%
+  Trade-off: pay \textbf{250} once to write T1, then each of the 10 inner scans reads 250 instead of 500 pages
+  (saves $10 \times 250 = 2500$).}
+
+\begin{frame}{Join ordering again \src{L15}{21}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \item Let's try \textbf{flipping the join order again}, now with the materialisation trick
+        \item Same formula, roles swapped: \\
+              $[S] + [R] + [T1] + [\sel{\mathit{rating}>5}(S)]\cdot[T1]$, \ $T1 = \sel{\mathit{bid}=100}(R)$
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox{52mm}{\PlanFive}\centering\cost{4250 I/Os}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Query plan 6 cost \src{L15}{22}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \item Scan Sailors: \textbf{500 I/Os}
+        \item Scan Reserves: \textbf{1000 I/Os}
+        \item Materialise temp table T1: \textbf{??? I/Os}
+        \item For each page of high-rated Sailors\\ scan T1: \textbf{??? I/Os}
+        \item Total $= 500 + 1000 + \;???\; + 250 \cdot \;???$
+        \item 100 boat values, uniformly distributed\\
+              Total $= 500 + 1000 + 10 + 250 \cdot 10 =$ \cost{4010 I/Os}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox[hl]{60mm}{\PlanSix}
+  \end{columns}
+\end{frame}
+
+\compareplans{Decision 5 \src{L15}{23}}{\PlanFive}{4250 I/Os}{\PlanSix}{4010 I/Os}{%
+  With materialisation the \emph{inner} is tiny (10 pages), so even 250 outer pages cost only $250 \times 10$.
+  The best join order \textbf{depends on the other decisions} (compare Decision 3).}
+
+\soFar{6}{sort-merge join}
 
 % ---------------------------------------------------------------------
 \subsection{Plans 7--8: other join algorithms}
-\begin{frame}{Plan 7: sort-merge join}
-  \placeholder{Plan tree + pass calculation \src{L15}{25--28}}
+
+\compareplans{Join algorithm \src{L15}{25}}{\PlanSix}{4010 I/Os}{\PlanSeven}{Cost?}{%
+  \begin{itemize}
+    \fitem{(sort-merge join)}{\src{L12}{32}, \src{L11}{12}}: sort(outer) + sort(inner) + $(M+N)$,
+      where sorting $N$ pages costs $2N \cdot (1 + \lceil \log_{B-1} \lceil N/B \rceil \rceil)$.
+  \end{itemize}}
+
+\begin{frame}{Query plan 7 cost \src{L15}{26}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      Cost estimation with 5 buffers:
+      \begin{itemize}
+        \item Scan Sailors: \textbf{500 I/Os}
+        \item Scan Reserves: \textbf{1000 I/Os}
+        \item Sort high-rated Sailors: \textbf{??? I/Os}
+        \item Sort reservations for boat 100: \textbf{??? I/Os}
+        \begin{itemize}
+          \item Pass 0 doesn't do read I/O, it just gets its input from the selection
+        \end{itemize}
+        \item How many passes for each sort?
+        \item Merge: $(10 + 250) = $ \textbf{260 I/Os}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox[hl]{56mm}{\PlanSeven}
+  \end{columns}
 \end{frame}
-\begin{frame}{Plan 8: block nested loops join}
-  \placeholder{Plan tree + cost \src{L15}{30--32}}
+
+\begin{frame}{Query plan 7 cost, part 2 \src{L15}{27}}
+  \small
+  External sort with 5 buffers (merge $B-1 = 4$ runs at a time):
+  \begin{itemize}
+    \item Reserves, 10 pages: $1 + \lceil \log_4 \lceil 10/5 \rceil \rceil = 1 + \lceil \log_4 2 \rceil =$ \textbf{2 passes}
+          \quad Pass 0 $= 10$ to write; \ Pass 1 $= 2 \times 10 = 20$ to read/write
+    \item Sailors, 250 pages: $1 + \lceil \log_4 \lceil 250/5 \rceil \rceil = 1 + \lceil 2.82 \rceil =$ \textbf{4 passes}
+          \quad Pass 0 $= 250$ to write; \ Passes 1--3 $= 2 \times 250 = 500$ each
+    \item Total $=$ scan both $(1000 + 500)$ + sort Reserves $(10 + 20)$
+          + sort Sailors $(250 + 3 \times 500)$ + merge $(260)$ $=$ \cost{3540 I/Os}
+  \end{itemize}
+  \begin{extrabox}[Pass 0 costs only a write --- why?]
+    L11 charges $2N$ per pass (read + write). Here pass 0 receives its tuples \emph{pipelined} from $\sigma$
+    (iterator model, L13), so its read is already paid for by the $1000 + 500$ table scans.
+  \end{extrabox}
 \end{frame}
+
+\compareplans{Decision 6 \src{L15}{28}}{\PlanSix}{4010 I/Os}{\PlanSeven}{3540 I/Os}{%
+  Changing the \textbf{physical join algorithm} alone saves $\approx 12\%$. Most of SMJ's cost is sorting the
+  250-page Sailors input (1750 I/Os) --- small B means many passes.}
+
+\soFar{7}{block nested loops join}
+
+\begin{frame}{Join algorithm again, again \src{L15}{30}}
+  \begin{columns}[T]
+    \column{0.43\textwidth}
+      \planbox[small]{37mm}{\PlanSix}\centering\cost{4010 I/Os}
+    \column{0.06\textwidth}
+      \centering\vspace*{20mm}{\color{vinuRed}\Large\faArrowRight}
+    \column{0.43\textwidth}
+      \planbox[small,hl]{37mm}{\PlanEight}\centering\cost{Cost?}
+  \end{columns}
+  \vspace{1mm}
+  \begin{itemize}\footnotesize
+    \fitem{(block NLJ)}{\src{L12}{13}}: $M + \lceil M/(B-2) \rceil \cdot N$ --- back to our best NLJ plan (sort-merge: 3540).
+  \end{itemize}
+  {\scriptsize\color{vinuRed}\faExclamationTriangle\ The original slide says ``sort merge at 3510 I/Os'' --- a typo: the value computed on \src{L15}{27} is 3540.}
+\end{frame}
+
+\begin{frame}{Query plan 8 cost \src{L15}{31}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      Cost estimation with 5 buffers:
+      \begin{itemize}
+        \item Scan Sailors: \textbf{500 I/Os}
+        \item Scan Reserves: \textbf{1000 I/Os}
+        \item Write temp table T1: \textbf{10 I/Os}
+        \item For each block of high-rated Sailors, iterate over T1: \textbf{??? $\times$ 10 I/Os}
+        \begin{itemize}
+          \item Block size $= B - 2 = 3$ (1 page for the inner, 1 for output)
+          \item \#blocks $= \lceil 250/3 \rceil = 84$; Sailors tuples pipelined from the selection
+        \end{itemize}
+        \item Total $=$ scan both $(500 + 1000)$ + write T1 $(10)$ + BNLJ $(84 \times 10)$ $=$ \cost{2350 I/Os}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox[hl]{60mm}{\PlanEight}
+  \end{columns}
+\end{frame}
+
+\compareplans{Decision 7 \src{L15}{32}}{\PlanSeven}{3540 I/Os}{\PlanEight}{2350 I/Os}{%
+  BNLJ uses the memory we have: the inner is rescanned once per \emph{block} of 3 outer pages, not once per page
+  (250 inner scans become 84).}
+
+\soFar{8}{projection cascade}
 
 % ---------------------------------------------------------------------
 \subsection{Plans 9--10: projection \& indexes}
-\begin{frame}{Plan 9: projection pushdown + reordering}
-  \placeholder{Plan tree + cost; the no-index lower bound \src{L15}{34--37}}
+
+\begin{frame}{Projection cascade \& pushdown \src{L15}{34}}
+  \begin{columns}[c]
+    \column{0.52\textwidth}
+      \begin{itemize}
+        \fitem{(size after projection)}{\src{L14}{23--24}}:\\
+          $[\pi(X)] = \lceil |X| \cdot \text{bytes kept per tuple} \,/\, \text{page size} \rceil$
+        \item Keep only what is needed later: $\mathit{sid}$ (join key) from Reserves, $\mathit{sid},\mathit{sname}$ from Sailors
+        \item Reserves side: 1000 qualifying tuples $\times$ 4 B $= 4000$ B $\Rightarrow$ \hl{1 page}
+        \item \textbf{Super small!} Just one page $\to$ we can make it the \textbf{outer} relation in BNLJ
+      \end{itemize}
+    \column{0.45\textwidth}
+      \planbox[hl]{62mm}{\PlanEightP}
+  \end{columns}
 \end{frame}
-\begin{frame}{Plan 10: index nested loops join}
-  \placeholder{Plan tree + cost \src{L15}{39--42}}
+
+\begin{frame}{With join reordering, no materialisation \src{L15}{35}}
+  \begin{columns}[c]
+    \column{0.52\textwidth}
+      \begin{itemize}
+        \item We will try \textbf{reordering the join again}: the 1-page Reserves side becomes the outer
+        \item We will also \textbf{skip the materialisation} this time
+        \begin{itemize}
+          \item ``Convince yourself that it doesn't help'' --- see the next slide
+        \end{itemize}
+      \end{itemize}
+    \column{0.45\textwidth}
+      \planbox{62mm}{\PlanEightP}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Our explanation: why materialisation does not help here}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+      \footnotesize
+      Materialising an input $I$ into $T$ pays a \textbf{one-time} cost to make \textbf{repeated} reads cheaper.
+      If the inner is scanned $p$ times:
+      \vspace{-1mm}
+      \[
+        \underbrace{p \cdot [I]}_{\text{no materialisation}}
+        \quad\text{vs.}\quad
+        \underbrace{[I] + [T] + p \cdot [T]}_{\text{read once, write } T\text{, scan } T\ p \text{ times}}
+      \]
+      Worth it only if $(p - 1)\,[I] > (p + 1)\,[T]$.
+      \begin{itemize}
+        \item Plan 5: $p = 10$: \ $9 \cdot 500 > 11 \cdot 250$ \ \checkmark\ (saves)
+        \item Plan 8: $p = 84$: \ $83 \cdot 1000 > 85 \cdot 10$ \ \checkmark\ (saves)
+        \item Plan 9: the outer (1 page) fits in \textbf{one block} $\Rightarrow p = 1$ $\Rightarrow$ left side is 0:
+              materialising can only \emph{add} $2[T]$ I/Os
+      \end{itemize}
+    \column{0.42\textwidth}
+      \begin{extrabox}[Is it because of the algorithm?]
+        \footnotesize No --- it is the \textbf{number of inner passes}. BNLJ only matters because it makes $p = 1$.
+        A page NLJ with a 1-page outer would also scan the inner once, and materialisation would not help either.
+      \end{extrabox}
+      \begin{extrabox}[What about the outer side?]
+        \footnotesize The outer is read exactly once anyway (pipelined into the block buffer), so there is nothing to save.
+      \end{extrabox}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Query plan 9 cost \src{L15}{36}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      Cost estimation with 5 buffers:
+      \begin{itemize}
+        \item Scan Reserves: \textbf{1000 I/Os}
+        \item For each block of sids that rented boat 100\\ iterate over Sailors: \textbf{??? $\times$ 500 I/Os}
+        \item Recall: a Reserves tuple is 40 B, assume $\mathit{sid}$ is 4 B\\
+              $\Rightarrow$ 10 pages down to \textbf{1 page} $\Rightarrow$ $\lceil 1/3 \rceil = 1$ block
+        \item Total $= 1000 + 1 \times 500 =$ \cost{1500 I/Os}
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox[hl]{60mm}{\PlanNine}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Decision 8 \src{L15}{37}}
+  \begin{columns}[T]
+    \column{0.43\textwidth}
+      \planbox[small]{37mm}{\PlanEight}\centering\cost{2350 I/Os}
+    \column{0.06\textwidth}
+      \centering\vspace*{17mm}{\color{vinuRed}\Large\faArrowRight}
+    \column{0.43\textwidth}
+      \planbox[small,hl]{37mm}{\PlanNine}\centering\cost{1500 I/Os}
+  \end{columns}
+  \vspace{-1mm}
+  \begin{extrabox}[Cannot do better without indexes. Why?]
+    \footnotesize No index $\Rightarrow$ we must read \textbf{every page of both tables at least once}:
+    $1000 + 500 = 1500$ is a lower bound, and Plan 9 reaches it.
+  \end{extrabox}
+\end{frame}
+
+\soFar{9}{indexes}
+
+\begin{frame}{Reminder: what we know about indexes (Weeks 3--4)}
+  \small
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+      \textbf{B+-tree search}
+      \begin{itemize}
+        \item Root-to-leaf; high fanout $\Rightarrow$ height rarely exceeds 3 \src{L09}{13}
+        \item Top levels often held in the buffer pool \src{L09}{16}
+        \item Here: ``indexes fit in memory'' $\Rightarrow$ \hl{search = 0 I/O}; we pay only for \emph{data} pages
+      \end{itemize}
+      \textbf{Keys}
+      \begin{itemize}
+        \item $\mathit{sid}$ is the key of Sailors $\Rightarrow$ \textbf{at most one} match per lookup
+      \end{itemize}
+    \column{0.5\textwidth}
+      \textbf{Clustered vs.\ unclustered} \src{L08}{36, 39}
+      \begin{itemize}
+        \item \textbf{Clustered}: data file (mostly) sorted by the search key $\Rightarrow$ matching records sit on
+              \emph{consecutive} pages; cost = \#pages holding matches
+        \item \textbf{Unclustered}: matches scattered; cost $\approx$ \#matching records (one I/O each)
+        \item At most one clustered index per table
+      \end{itemize}
+      \textbf{INLJ} \src{L12}{15}
+      \begin{itemize}
+        \item $M + m \cdot (\text{search} + \text{matching pages / tuples})$
+      \end{itemize}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How about indexes? \src{L15}{39}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \fitem{(INLJ)}{\src{L12}{15}}: $\text{cost(outer access)} + |\text{outer}| \cdot \text{cost(one lookup)}$
+        \item Indexes:
+        \begin{itemize}
+          \item \textbf{Clustered} tree index on \textbf{Reserves.bid}
+          \item \textbf{Unclustered} tree index on \textbf{Sailors.sid}
+        \end{itemize}
+        \item Assume indexes fit in memory
+        \item The clustered index gives the $\mathit{bid}=100$ tuples directly (on 10 pages);
+              the $\mathit{sid}$ index finds each sailor without scanning Sailors
+      \end{itemize}
+    \column{0.42\textwidth}
+      \planbox[hl]{56mm}{\PlanTen}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How about indexes? Notes on the plan \src{L15}{40}}
+  \begin{columns}[c]
+    \column{0.6\textwidth}
+      \begin{itemize}\footnotesize
+        \item \textbf{No projection pushdown to the left for $\pi_{\mathit{sid}}$}
+        \begin{itemize}
+          \item Projecting out fields of the outer of an INLJ makes no I/O difference (still one lookup per tuple)
+          \item \emph{Ours:} INLJ costs $\ldots + m \cdot (\ldots)$, driven by the number of outer \emph{tuples} $m$,
+                which projection does not change; the 10 Reserves pages are read before $\pi$ anyway
+        \end{itemize}
+        \item \textbf{No selection pushdown to the right for $\sigma_{\mathit{rating}>5}$}
+        \begin{itemize}
+          \item It does not affect the Sailors.sid index lookup (I/O cost remains the same)
+          \item \emph{Ours:} the index is on $\mathit{sid}$, not $\mathit{rating}$: a sailor's rating is only
+                known \emph{after} its page is fetched
+        \end{itemize}
+      \end{itemize}
+    \column{0.37\textwidth}
+      \planbox[hl]{52mm}{\PlanTen}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How many Reserves pages do we read? \src{L15}{41}}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+      \small
+      $100{,}000 / \textcolor{vinuRed}{100} = 1000$ tuples on $1000 / \textcolor{vinuNavy}{100} = 10$ pages.
+      \textbf{The two 100s mean different things:}
+      \begin{enumerate}
+        \item \textcolor{vinuRed}{\textbf{100 boats}}, equally likely $\Rightarrow$ selectivity of $\mathit{bid}=100$ is $1/100$:
+              $100{,}000 \times 1/100 = 1000$ matching tuples
+        \item \textcolor{vinuNavy}{\textbf{100 tuples per page}}: the index is \textbf{clustered}, so these 1000 tuples
+              are stored \emph{next to each other} and packed full: $1000 / 100 = 10$ pages
+      \end{enumerate}
+      \begin{itemize}
+        \item Equivalently: 1000 pages $\times$ 1/100 = 10 pages
+        \item Join column $\mathit{sid}$ is a key for Sailors $\Rightarrow$ at most \textbf{one} matching tuple via the unclustered index on $\mathit{sid}$
+      \end{itemize}
+    \column{0.42\textwidth}
+      \centering
+      \begin{tikzpicture}[x=3.1mm,y=3.1mm,font=\tiny]
+        \node[anchor=west,text=vinuNavy] at (0,8.3) {Reserves data file, sorted by bid};
+        \foreach \i in {0,...,11} {
+          \pgfmathsetmacro{\c}{(\i>=4 && \i<=7) ? 1 : 0}
+          \ifdim\c pt=1pt \fill[vinuRed!70] (\i,5) rectangle ++(0.85,2);
+          \else \fill[vinuNavy!20] (\i,5) rectangle ++(0.85,2); \fi }
+        \node[text=vinuGray] at (2,4.3) {bid $<$ 100};
+        \node[text=vinuRed] at (6,4.3) {bid $=$ 100};
+        \node[text=vinuGray] at (10,4.3) {bid $>$ 100};
+        \draw[vinuRed,decorate,decoration={brace,mirror,amplitude=2pt}] (4,3.6) -- (7.85,3.6)
+          node[midway,below=1pt,text=vinuRed,align=center] {10 consecutive pages\\(clustered)};
+        \node[anchor=west,text=vinuNavy] at (0,0) {Unclustered: the same 1000 tuples};
+        \node[anchor=west,text=vinuNavy] at (0,-1) {could be spread over up to 1000 pages};
+      \end{tikzpicture}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{How about indexes? Total cost \src{L15}{42}}
+  \begin{columns}[c]
+    \column{0.55\textwidth}
+      \begin{itemize}\small
+        \item With the clustered index on Reserves.bid: \textbf{10 pages} of Reserves (search is free: index in memory)
+        \item For each such Reserves tuple (\textbf{1000 tuples}) get the matching Sailors tuple: \textbf{1 I/O}
+              ($\mathit{sid}$ is a key; unclustered $\Rightarrow$ assume a different page each time)
+        \item Total $= 10 + 1000 \times 1 =$ \cost{1010 I/Os}
+      \end{itemize}
+      \begin{notebox}
+        \footnotesize Beats the 1500 ``lower bound'', which only held \emph{without} indexes:
+        we skip 990 of the 1000 Reserves pages and never scan Sailors.
+      \end{notebox}
+    \column{0.42\textwidth}
+      \planbox[hl]{52mm}{\PlanTen}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Our what-ifs: how fragile is 1010?}
+  \footnotesize
+  \begin{center}
+  \begin{tabular}{l l r}
+    \toprule
+    \textbf{Change one assumption} & \textbf{Cost} & \textbf{I/Os} \\
+    \midrule
+    As on the slides (index in memory, bid clustered)   & $10 + 1000 \times 1$ & 1010 \\
+    Index on Reserves.bid \textbf{unclustered}          & $\le 1000 + 1000 \times 1$ & up to 2000 \\
+    Sailors.sid index \textbf{not} in memory \src{L12}{15} & $10 + 1000 \times (2..4 + 1)$ & 3010--5010 \\
+    Buffer pool caches some Sailors pages               & $10 + {}$fewer than 1000 & $< 1010$ \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  {\scriptsize\color{vinuGray} (2--4 I/Os to reach a B+-tree leaf, then 1 I/O for the data page.)}
+  \begin{extrabox}[Take-away]
+    INLJ wins only because the outer is \textbf{small} (1000 tuples) and each lookup is \textbf{cheap}.
+    If index pages had to be read from disk, Plan 9's BNLJ (1500) would be the better plan ---
+    the optimiser's choice depends on \textbf{statistics and assumptions}, not on a fixed ranking of algorithms.
+  \end{extrabox}
 \end{frame}
 
 % ---------------------------------------------------------------------
 \subsection{The entire story}
-\begin{frame}{The entire story}
-  \placeholder{Scoreboard table of all 10 plans \src{L15}{43}}
+
+\begin{frame}{The entire story \src{L15}{43}}
+  \footnotesize
+  \begin{center}
+  \begin{tabular}{r l r l}
+    \toprule
+    \textbf{\#} & \textbf{Plan idea} & \textbf{I/Os} & \textbf{Lesson} \\
+    \midrule
+    1  & Basic page nested loops                    & 500,500 & Baseline \\
+    2  & Selection pushdown on left                 & 250,500 & Filtering the outer early cuts inner scans \\
+    3  & More selection pushdown on right           & 250,500 & On-the-fly filter on the inner saves no I/O \\
+    4  & Join ordering                              & 6,000   & More selective side as outer \\
+    5  & Materialising inner loop                   & 4,250   & Pay once to shrink a re-scanned input \\
+    6  & Join ordering again with materialisation   & 4,010   & Decisions interact \\
+    7  & Sort-merge join                            & 3,540   & Physical algorithm matters \\
+    8  & Block nested loops join                    & 2,350   & Use memory B to rescan less \\
+    9  & Projection cascade, plus reordering again  & 1,500   & Narrow tuples fit in one block \\
+    \rowcolor{vinuRed!8}
+    10 & Index nested loops join                    & 1,010   & Indexes avoid reading whole tables \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \centering Still only a \alert{subset} of the possible plans for this query!!!
 \end{frame}
+
 \begin{frame}{Meta-lessons}
-  \placeholder{500$\times$ gap; three kinds of moves; moves interact; heuristics usually good}
+  \begin{enumerate}
+    \item \textbf{Same query, same answer, $\sim$500$\times$ difference in cost} --- that is why optimisers exist.
+    \item Gains came from all three kinds of plan-space moves: \textbf{logical rewrites} (pushdown, reordering),
+          \textbf{physical choices} (PNLJ $\to$ SMJ $\to$ BNLJ $\to$ INLJ, scan $\to$ index scan) and
+          \textbf{materialisation} decisions.
+    \item \textbf{Moves interact}: a pushdown useless in Plan 3 became useful after materialisation (Plan 5);
+          materialisation useful in Plan 8 was useless in Plan 9 $\Rightarrow$ we need a \emph{systematic search} with a \emph{cost model}.
+    \item Heuristics are \textbf{usually} good, not always --- and every number rests on statistics and assumptions.
+  \end{enumerate}
 \end{frame}
