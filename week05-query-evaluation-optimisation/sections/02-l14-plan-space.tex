@@ -8,49 +8,163 @@
 % ---------------------------------------------------------------------
 \subsection{Why optimise?}
 \begin{frame}{Why optimise?}
-  \placeholder{Declarative vs imperative; goal; NP-hard $\Rightarrow$ ``avoid bad plans'' \src{L14}{2--3}}
+  \begin{itemize}
+    \item A SQL query defines \textbf{What} you want to achieve (declarative)
+    \item Computer programs (DBMS) decide \textbf{How} to compute it (imperative)
+    \item With one simple query, an efficient plan can reduces cost by 500$\times$! (Lecture 15)
+    \item Query optimization is NP-Hard. We use cost estimation and heuristics.
+  \end{itemize}
 \end{frame}
 
-\begin{frame}{Optimisation strategies}
-  \placeholder{System R and other strategies (Cascades, stratified, randomised, AI) \src{L14}{4}}
-\end{frame}
+% \begin{frame}{Optimisation strategies}
+%   \placeholder{System R and other strategies (Cascades, stratified, randomised, AI) \src{L14}{4}}
+% \end{frame}
 
 % ---------------------------------------------------------------------
 \subsection{The query lifecycle}
 \begin{frame}{The query lifecycle}
-  \placeholder{Parser $\to$ Rewriter $\to$ Optimiser $\to$ Executor diagram \src{L14}{5}}
+  \begin{columns}[T]
+    \column{0.35\textwidth}
+      \footnotesize
+      \begin{itemize}
+        \item \textbf{Parser}: transforms SQL query to an internal representation (parse tree).
+        \item \textbf{Rewriter}: simplify the queries using equivalent rules
+        \item \textbf{Optimiser}: use a \hl{cost model} to choose the cheapest plan
+      \end{itemize}        
+      
+    \column{0.64\textwidth}
+      \centering
+      \includegraphics[width=\linewidth,height=0.72\textheight,keepaspectratio]{query-lifecycle}
+  \end{columns}
 \end{frame}
 
 \begin{frame}{Parser and query blocks}
-  \placeholder{Syntactic/semantic analysis; query block shape \src{L14}{6}}
+  \begin{itemize}
+    \item Perform syntatic and semantic analysis to build \hl{query blocks}
+  \end{itemize}
+  \vspace{4mm}
+  \centering
+  % source: figures/query-block.tex (standalone TikZ, compiled to PDF)
+  \includegraphics[width=0.92\linewidth,height=0.68\textheight,keepaspectratio]{query-block}
 \end{frame}
 
 \begin{frame}{Rewriter: heuristic simplifications}
-  \placeholder{Equivalence definition; 4 rewrite examples (PK requirement!) \src{L14}{7--9}}
+  \begin{itemize}\small
+    \item Definition: two relational algebra expressions are \hl{equivalent} if they return the same set of tuples on any database instances.
+    \item The rewriter only uses general RA rules and heuristics, with no database-specific information.
+  \end{itemize}
+  \vspace{1mm}
+  \centering
+  % source: figures/rewriter-examples.tex (standalone, compiled to PDF)
+  \includegraphics[width=\linewidth,height=0.6\textheight,keepaspectratio]{rewriter-examples}
 \end{frame}
 
 \begin{frame}{Optimiser}
-  \placeholder{Per query block: enumerate, cost, choose \src{L14}{10}}
+  % \placeholder{Per query block: enumerate, cost, choose \src{L14}{10}}
+  \begin{itemize}
+    \item Every block is processed separately.
+    \item Plan generator enumerates all possible plans. As this can be large, in reality, we narrow down to ``promising'' candidates only.
+    \item The estimator determines cost of a plan based on the \textit{cost model}.
+    \item The best plan among all candidates is chosen. Best is not \textit{optimal}!.
+  \end{itemize}
 \end{frame}
 
 % ---------------------------------------------------------------------
 \subsection{Three components of optimisation}
 \begin{frame}{Three components of query optimisation}
   \placeholder{Plan space \textbullet\ cost estimation \textbullet\ search strategy \src{L14}{12}}
+  \begin{itemize}
+    \item \textbf{Plan space}: the set of all plans we consider for a query. Larger plan is harder to search.
+    \item \textbf{Cost estimation}.
+    \item \textbf{Search strategy}: how do we enumerate the plan space. Think of BFS/DFS.
+  \end{itemize}
 \end{frame}
 
 % ---------------------------------------------------------------------
 \subsection{Relational algebra equivalences}
-\begin{frame}{Relational algebra equivalences}
-  \placeholder{Selection cascade/commute; projection cascade; $\times$ assoc./comm. \src{L14}{15--16}}
+\begin{frame}{Relational algebra equivalences \src{L14}{16}}
+  \textbf{Selections}
+  \begin{align*}
+    \sel{c_1 \wedge c_2 \wedge \cdots \wedge c_n}(R) &\equiv \sel{c_1}\big(\sel{c_2}(\cdots \sel{c_n}(R))\big) && \text{(cascade)}\\
+    \sel{c_1}\big(\sel{c_2}(R)\big) &\equiv \sel{c_2}\big(\sel{c_1}(R)\big) && \text{(commute)}
+  \end{align*}
+  \textbf{Projections}
+  \begin{align*}
+    \proj{a_1}(R) &\equiv \proj{a_1}\big(\cdots(\proj{a_1,\ldots,a_{n-1}}(R))\cdots\big) && \text{(cascade)}
+  \end{align*}
+  \textbf{Cartesian products}
+  \begin{align*}
+    R \cross (S \cross T) &\equiv (R \cross S) \cross T && \text{(associative)}\\
+    R \cross S &\equiv S \cross R && \text{(commutative)}
+  \end{align*}
+  {\small Recall that the ordering of attributes doesn't matter.}
 \end{frame}
 
-\begin{frame}{Are joins associative and commutative?}
-  \placeholder{Three attempts on R(A,Y), S(A,B), T(B,Z) + counter-example \src{L14}{17}}
+\begin{frame}{Are joins associative and commutative? \src{L14}{17}}
+  \begin{itemize}
+    \item After all, just Cartesian products with selections
+    \item You can think of them as associative and commutative \dots\ but beware of joins turning into cross-products!
+  \end{itemize}
+  \vspace{1mm}
+  Consider $R(A,Y)$, $S(A,B)$, $T(B,Z)$:
+  \vspace{1mm}
+
+  \small
+  \begin{tabular}{@{}l l >{\raggedright\arraybackslash}p{27mm}@{}}
+    Attempt 1: &
+      $(S \njoin[S.B=T.B] T) \njoin[S.A=R.A] R \;\textcolor{vinuRed}{\not\equiv}\; S \njoin[S.B=T.B] (T \njoin[S.A=R.A] R)$ &
+      \textbf{Not legal!}\newline{\footnotesize (join on A not allowed)} \\[2mm]
+    Attempt 2: &
+      $(S \njoin[S.B=T.B] T) \njoin[S.A=R.A] R \;\textcolor{vinuRed}{\not\equiv}\; S \njoin[S.B=T.B] (T \cross R)$ &
+      \textbf{Not the same!}\newline{\footnotesize (no condition on A)} \\[2mm]
+    Attempt 3: &
+      $(S \njoin[S.B=T.B] T) \njoin[S.A=R.A] R \;\textcolor{vinuRed}{\equiv}\; S \njoin[S.B=T.B \,\wedge\, S.A=R.A] (T \cross R)$ &
+      \textbf{The same!}
+  \end{tabular}
 \end{frame}
 
-\begin{frame}{Join ordering and transitivity}
-  \placeholder{Four equivalent join trees; transitivity adds predicates \src{L14}{18--19}}
+\begin{frame}[fragile]{Join ordering and transitivity \src{L14}{18--19}}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+      \small
+      \textbf{Join ordering}
+      \begin{itemize}
+        \item Similarly, note that some join orders have cross products, some don't
+        \item Equivalent for the query below:
+      \end{itemize}
+\begin{lstlisting}
+SELECT * FROM R, S, T
+ WHERE R.A = S.A AND S.B = T.B
+\end{lstlisting}
+      \vspace{-3mm}
+      \begin{align*}
+        &(R \njoin[R.A=S.A] S) \njoin[S.B=T.B] T\\
+        &R \njoin[R.A=S.A] (S \njoin[S.B=T.B] T)\\
+        &R \njoin[R.A=S.A] (T \njoin[S.B=T.B] S)\\
+        &(R \cross T) \njoin[R.A=S.A \,\wedge\, S.B=T.B] S
+      \end{align*}
+    \column{0.47\textwidth}
+      \small
+      \textbf{Introducing additional join conditions}
+      \begin{itemize}
+        \item Implicit join through transitivity \dots
+      \end{itemize}
+\begin{lstlisting}
+SELECT * FROM R, S, T
+ WHERE R.A = S.B AND S.B = T.C
+\end{lstlisting}
+      \begin{itemize}
+        \item \dots\ can be turned into
+      \end{itemize}
+\begin{lstlisting}[escapechar=!]
+SELECT * FROM R, S, T
+ WHERE R.A = S.B AND S.B = T.C
+   !\textcolor{vinuRed}{\textbf{AND R.A = T.C}}!
+\end{lstlisting}
+      \begin{itemize}
+        \item \dots\ making the join ordering \hl{$(R \njoin T) \njoin S$} possible (avoids a Cartesian product)
+      \end{itemize}
+  \end{columns}
 \end{frame}
 
 % ---------------------------------------------------------------------

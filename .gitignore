@@ -12,6 +12,8 @@ build/
 *.synctex.gz
 *.xdv
 *.pdf
+# ...but keep compiled figures, which the slides \includegraphics
+!**/figures/*.pdf
 # OS / editor
 .DS_Store
 Thumbs.db
