@@ -1,0 +1,48 @@
+% =====================================================================
+%  Selection push-down on the Sailors/Reserves plan, after [L14, s.22]
+%  Compile:  pdflatex selection-pushdown.tex   (inside this folder)
+%  Output:   selection-pushdown.pdf  -> \includegraphics{selection-pushdown}
+% =====================================================================
+\makeatletter\def\input@path{{../../theme/}}\makeatother   % shared palette
+\documentclass[tikz,border=2pt,11pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage[defaultsans]{lato}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{amsmath,amssymb}
+\usepackage{vinuni-palette}
+\input{pushdown-style}
+
+\begin{document}
+\begin{tikzpicture}[x=1mm, y=1mm]
+  % ---- before: one selection above the join -------------------------
+  \begin{scope}[local bounding box=L]
+    \opn{p}{(0,0)}{\pi}{sname}
+    \opn[\hi]{s}{(0,-9)}{\sigma}{bid=100 $\wedge$ rating > 5}
+    \opn{j}{(0,-18)}{\bowtie}{sid=sid}
+    \node[rel] (r) at (-9,-27) {Reserves};
+    \node[rel] (t) at ( 9,-27) {Sailors};
+    \draw[un] (s) -- (p);  \draw[un] (j) -- (s);
+    \draw[bin] (r) -- (j); \draw[bin] (t) -- (j);
+  \end{scope}
+
+  \node[goes] at (45,-13) {};
+
+  % ---- after: each conjunct pushed onto its own input ----------------
+  \begin{scope}[xshift=72mm, local bounding box=R]
+    \opn{p}{(0,0)}{\pi}{sname}
+    \opn{j}{(0,-9)}{\bowtie}{sid=sid}
+    \opn[\hi]{s1}{(-11,-18)}{\sigma}{bid=100}
+    \opn[\hi]{s2}{( 9,-18)}{\sigma}{rating > 5}
+    \node[rel] (r) at (-11,-27) {Reserves};
+    \node[rel] (t) at (  9,-27) {Sailors};
+    \draw[un] (j) -- (p);
+    \draw[bin] (s1) -- (j); \draw[bin] (s2) -- (j);
+    \draw[un] (r) -- (s1);  \draw[un] (t) -- (s2);
+  \end{scope}
+
+  \begin{scope}[on background layer]
+    \node[panel, fit=(L)] {};
+    \node[panel, fit=(R)] {};
+  \end{scope}
+\end{tikzpicture}
+\end{document}

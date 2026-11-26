@@ -1,0 +1,33 @@
+% =====================================================================
+%  Query rewriter: example simplifications, after [L14, s.8-9]
+%  Compile:  pdflatex rewriter-examples.tex   (inside this folder)
+%  Output:   rewriter-examples.pdf  -> \includegraphics{rewriter-examples}
+% =====================================================================
+\makeatletter\def\input@path{{../../theme/}}\makeatother   % shared palette
+\documentclass[border=2pt,11pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage[defaultsans]{lato}
+\usepackage[varqu,varl]{zi4}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[table]{xcolor}
+\usepackage{vinuni-palette}
+\usepackage{array}
+
+\newcommand{\kw}[1]{\textcolor{vinuRed}{\textbf{#1}}}   % SQL keyword
+\newcommand{\goesto}{\textcolor{vinuRed}{$\Rightarrow$}}
+
+\begin{document}
+\color{vinuNavy}\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}>{\bfseries}l >{\ttfamily}l c >{\ttfamily}l@{}}
+  \multicolumn{4}{@{}l@{}}{\ttfamily R(\underline{id} \kw{PK}, val \kw{NOT NULL})}\\
+  \arrayrulecolor{vinuNavy!40}\hline
+  Impossible predicate  & \kw{WHERE} 1 = 0 & \goesto & {\sffamily\itshape empty, R never read} \\
+  Unnecessary predicate & \kw{WHERE} 1 = 1 & \goesto & {\sffamily\itshape drop the WHERE} \\
+  Join elimination      & R R1 \kw{JOIN} R R2 \kw{ON} R1.id = R2.id & \goesto & R \\
+  Nested subquery       & \begin{tabular}[t]{@{}l@{}}\kw{SELECT} * \kw{FROM} R \kw{AS} R1 \kw{WHERE EXISTS}\\ \ \ (\kw{SELECT} * \kw{FROM} R \kw{AS} R2 \kw{WHERE} R1.id = R2.id)\end{tabular} & \goesto & \kw{SELECT} * \kw{FROM} R \\
+  Merging predicates    & val \kw{BETWEEN} 1 \kw{AND} 100 \kw{OR} \ldots\ 50 \kw{AND} 150 & \goesto & val \kw{BETWEEN} 1 \kw{AND} 150 \\
+  \hline
+\end{tabular}
+\end{document}

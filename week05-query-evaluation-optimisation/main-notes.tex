@@ -1,0 +1,23 @@
+% Step 2 of the speaker-notes build: keep only the slides that have notes.
+% Reads build/main-notes-full.notepages (one \vinuNotePage{n} per note page) and
+% copies pages n-1 (the slide) and n (its notes) from build/main-notes-full.pdf.
+% Build step 1 first:  latexmk main-notes-full.tex  &&  latexmk main-notes.tex
+% (the build scripts do both:  ..\build.ps1 week05 -Notes   /   ../build.sh --notes week05)
+% Note: pages are copied as images of the PDF, so hyperlinks are not clickable here.
+\documentclass{article}
+\usepackage{graphicx}
+\hoffset=-1in \voffset=-1in   % ship each copied page at the paper's top-left corner
+
+\newif\ifvinuAny
+% copy page #1 of the full notes PDF as one output page of the same size
+\newcommand\vinuShip[1]{%
+  \setbox0=\hbox{\includegraphics[page=#1]{build/main-notes-full.pdf}}%
+  \pdfpagewidth=\wd0 \pdfpageheight=\ht0
+  \shipout\box0 \global\vinuAnytrue}
+\newcommand\vinuNotePage[1]{\vinuShip{\the\numexpr#1-1\relax}\vinuShip{#1}}
+
+\begin{document}
+\InputIfFileExists{build/main-notes-full.notepages}{}{%
+  \errmessage{build/main-notes-full.notepages not found: build main-notes-full.tex first}}
+\ifvinuAny\else No slide has speaker notes yet.\fi
+\end{document}

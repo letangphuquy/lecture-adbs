@@ -1,0 +1,19 @@
+% Shared TikZ styles for the push-down figures (selection-pushdown.tex,
+% projection-pushdown.tex), after the plan trees in [L14, s.22 and s.24].
+% Not compiled on its own: \input by those files.
+\usetikzlibrary{arrows.meta,shapes.arrows,fit,backgrounds}
+\tikzset{
+  op/.style   ={inner sep=0.6pt, text=vinuNavy},                       % operator symbol
+  lab/.style  ={font=\scriptsize, anchor=west, inner sep=0.4pt},       % operator subscript
+  rel/.style  ={font=\scriptsize, text=vinuNavy, inner sep=1pt},       % base relation
+  un/.style   ={-{Stealth[length=1.2mm]}, vinuNavy!80},                % unary input
+  bin/.style  ={-{Stealth[length=1.2mm]}, densely dotted, thick, vinuNavy!70},  % join input
+  panel/.style={draw=vinuGray!70, fill=vinuLightGray!70, inner xsep=3mm, inner ysep=2mm},
+  goes/.style ={single arrow, fill=vinuRed, draw=none, minimum height=9mm,
+                minimum width=7mm, single arrow head extend=1.2mm},
+}
+% \opn[colour]{name}{(x,y)}{symbol}{subscript}: operator + subscript label
+\newcommand{\opn}[5][vinuNavy]{%
+  \node[op, text=#1] (#2) at #3 {\Large$#4$};
+  \node[lab, text=#1] (#2l) at ([xshift=0.2mm, yshift=-1.2mm]#2.east) {#5};}
+\newcommand{\hi}{vinuRed}   % colour of the operators that the rewrite changes

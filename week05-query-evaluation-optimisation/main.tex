@@ -9,8 +9,23 @@
 % \documentclass[aspectratio=169,11pt,t,xcolor=table,handout]{beamer}  % one page per frame, no overlays
 \usetheme{VinUni}
 
-% Speaker notes (Part B "Presentation flow" goes into \note{...}):
-% \setbeameroption{show notes on second screen=right}
+% Speaker notes: write \note[item]{...} inside a frame.
+%   main.pdf        -> slides only (notes hidden)
+%   main-notes.pdf  -> only the slides that have notes, each followed by its notes page
+%                      (build:  ..\build.ps1 week05 -Notes   or   ../build.sh --notes week05)
+%   Two steps: main-notes-full.tex (every slide + notes) writes the page numbers of
+%   its note pages to build/main-notes-full.notepages; main-notes.tex then keeps
+%   only those pages and the slide right before each one.
+\ifdefined\withnotes
+  \setbeameroption{show notes}
+  % \setbeameroption{show notes on second screen=right}   % presenter view (pdfpc)
+  \makeatletter
+  \newwrite\vinu@notepages
+  \immediate\openout\vinu@notepages=\jobname.notepages
+  % non-immediate \write: \thepage is expanded when the note page is shipped out
+  \addtobeamertemplate{note page}{\write\vinu@notepages{\noexpand\vinuNotePage{\thepage}}}{}
+  \makeatother
+\fi
 
 % ---- Switches --------------------------------------------------------
 \newif\ifshowexamples \showexamplestrue   % appendix with layout examples

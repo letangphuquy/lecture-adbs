@@ -57,7 +57,7 @@ The PDF is written to `<week>/build/main.pdf`. You can also run `latexmk` inside
 | Callouts | `keybox` (key idea), `notebox` (⚠️ precision note), `extrabox` (🧩 extra) |
 | Relational algebra | `\sel{c}`, `\proj{a}`, `\njoin[p]`, `\cross` |
 | Code | `lstlisting` (SQL is the default, or `[language=pseudo]`); the frame needs `[fragile]` |
-| Speaker notes | `\note{...}`; turn them on with `\setbeameroption{show notes on second screen=right}` |
+| Speaker notes | `\note[item]{...}` inside a frame; `.\build.ps1 week05 -Notes` (or `./build.sh --notes week05`, `make notes W=week05`) builds `build/main-notes.pdf` with only the slides that have notes, each followed by its notes page |
 | Title / closing slide | `\vinuTitleFrame`, `\vinuClosingFrame{Thank you!}{Questions?}` |
 
 You'll find a working example of each of these in `sections/99-style-examples.tex`.
