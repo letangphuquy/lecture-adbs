@@ -1,0 +1,35 @@
+% =====================================================================
+%  Introducing an additional join condition through transitivity,
+%  after [L14, s.19]  (same style as rewriter-examples.tex)
+%  Compile:  pdflatex transitivity-example.tex   (inside this folder)
+%  Output:   transitivity-example.pdf  -> \includegraphics{transitivity-example}
+% =====================================================================
+\makeatletter\def\input@path{{../../theme/}}\makeatother   % shared palette
+\documentclass[border=2pt,11pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage[defaultsans]{lato}
+\usepackage[varqu,varl]{zi4}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[table]{xcolor}
+\usepackage{vinuni-palette}
+\usepackage{array}
+
+\newcommand{\kw}[1]{\textbf{#1}}                                 % SQL keyword
+\newcommand{\add}[1]{\textcolor{vinuRed}{#1}}                     % added condition
+\newcommand{\code}[1]{\colorbox{vinuNavy!7}{\ttfamily\begin{tabular}[c]{@{}l@{}}#1\end{tabular}}}
+\newcommand{\goesto}{\textcolor{vinuRed}{\Large$\Rightarrow$}}
+
+\begin{document}
+\color{vinuNavy}\footnotesize
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{@{}c c c@{}}
+  {\sffamily\itshape implicit join through transitivity} & & {\sffamily\itshape after the rewrite}\\[2pt]
+  \code{\kw{SELECT} * \kw{FROM} R, S, T\\
+        \ \kw{WHERE} R.A = S.B \kw{AND} S.B = T.C\\
+        \ } &
+  \goesto &
+  \code{\kw{SELECT} * \kw{FROM} R, S, T\\
+        \ \kw{WHERE} R.A = S.B \kw{AND} S.B = T.C\\
+        \ \ \ \add{\kw{AND} R.A = T.C}}
+\end{tabular}
+\end{document}

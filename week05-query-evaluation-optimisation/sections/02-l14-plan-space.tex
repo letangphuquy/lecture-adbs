@@ -5,6 +5,19 @@
 \sectionsubtitle{Lecture 14 \textbullet\ Which alternative plans exist, and how are they generated?}
 \section{Query Optimisation: Plan Space}
 
+\begin{frame}{Disclaimer for lectures 14 and 15}
+  \begin{keybox}[Source]
+    The next two parts closely follow the content and slide flow of two lectures from
+    \emph{Advanced Database Systems} (Spring 2026, Milos Nikolic, School of Informatics,
+    \textbf{University of Edinburgh}):
+    \begin{itemize}
+      \item \textbf{Lecture \#14 --- Query Optimisation: Plan Space}, cited as \src{L14}{n}
+      \item \textbf{Lecture \#15 --- Query Optimisation: Plan Space Example}, cited as \src{L15}{n}
+    \end{itemize}
+    Both in turn follow R.~Ramakrishnan \& J.~Gehrke, \emph{Database Management Systems}, 3rd ed., Ch.~15.
+  \end{keybox}
+\end{frame}
+
 % ---------------------------------------------------------------------
 \subsection{Why optimise?}
 \begin{frame}{Why optimise?}
@@ -13,6 +26,10 @@
     \item Computer programs (DBMS) decide \textbf{How} to compute it (imperative)
     \item With one simple query, an efficient plan can reduces cost by 500$\times$! (Lecture 15)
     \item Query optimization is NP-Hard. We use cost estimation and heuristics.
+    \begin{itemize}
+      \item Heuristics are shortcuts to assess and prefer one solution over another.
+      \item For example, you pick a restaurant based on its popularity.
+    \end{itemize}
   \end{itemize}
 \end{frame}
 
@@ -25,11 +42,10 @@
 \begin{frame}{The query lifecycle}
   \begin{columns}[T]
     \column{0.35\textwidth}
-      \footnotesize
       \begin{itemize}
-        \item \textbf{Parser}: transforms SQL query to an internal representation (parse tree).
+        \item \textbf{Parser}: transforms SQL queries (to trees)
         \item \textbf{Rewriter}: simplify the queries using equivalent rules
-        \item \textbf{Optimiser}: use a \hl{cost model} to choose the cheapest plan
+        \item \textbf{Optimiser}: use a \textit{cost model} to choose the cheapest plan
       \end{itemize}        
       
     \column{0.64\textwidth}
@@ -38,9 +54,10 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{Parser and query blocks}
+\begin{frame}{Parser as translator}
   \begin{itemize}
-    \item Perform syntatic and semantic analysis to build \hl{query blocks}
+    \item Perform syntatic \& semantic analysis to build an internal representation.
+    \item Can you relate to \href{https://www.geeksforgeeks.org/dsa/expression-tree/}{\textit{expression trees}}?
   \end{itemize}
   \vspace{4mm}
   \centering
@@ -48,10 +65,10 @@
   \includegraphics[width=0.92\linewidth,height=0.68\textheight,keepaspectratio]{query-block}
 \end{frame}
 
-\begin{frame}{Rewriter: heuristic simplifications}
+\begin{frame}{Rewriter as simplifier}
   \begin{itemize}\small
-    \item Definition: two relational algebra expressions are \hl{equivalent} if they return the same set of tuples on any database instances.
-    \item The rewriter only uses general RA rules and heuristics, with no database-specific information.
+    \item Definition: two relational algebra expressions are \hl{equivalent} if they return the same set of tuples on any given database instances.
+    \item The query rewriter applies only general RA rules and heuristic, not knowing about the actual database.
   \end{itemize}
   \vspace{1mm}
   \centering
@@ -62,27 +79,44 @@
 \begin{frame}{Optimiser}
   % \placeholder{Per query block: enumerate, cost, choose \src{L14}{10}}
   \begin{itemize}
-    \item Every block is processed separately.
-    \item Plan generator enumerates all possible plans. As this can be large, in reality, we narrow down to ``promising'' candidates only.
-    \item The estimator determines cost of a plan based on the \textit{cost model}.
-    \item The best plan among all candidates is chosen. Best is not \textit{optimal}!.
+    \item Each query block is processed separately.
+    \item Plan generator enumerates all possible plans. 
+    \begin{itemize}
+      \item The number of all combinations can be really large! 
+      \item In reality, we narrow down to ``promising'' candidates only.
+    \end{itemize}
+    \item The estimator determines cost of a plan based on the \hl{cost model}.
+    \item The best plan among all candidates is chosen. 
+    \begin{itemize}
+      \item Best-so-far is not always optimal!
+    \end{itemize}
   \end{itemize}
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Three components of optimisation}
+% \subsection{Three components of optimisation}
 \begin{frame}{Three components of query optimisation}
-  \placeholder{Plan space \textbullet\ cost estimation \textbullet\ search strategy \src{L14}{12}}
+  % \placeholder{Plan space \textbullet\ cost estimation \textbullet\ search strategy \src{L14}{12}}
   \begin{itemize}
-    \item \textbf{Plan space}: the set of all plans we consider for a query. Larger plan is harder to search.
+    \item \textbf{Plan space}: the set of all plans we consider for a query. 
+    \begin{itemize}
+      \item Trade-off: Larger spaces increase the chance to find the optimum. But it is also harder (more costly) to search.
+      \item Relate to approximation error and estimation error in ML, if you may.
+    \end{itemize}
     \item \textbf{Cost estimation}.
-    \item \textbf{Search strategy}: how do we enumerate the plan space. Think of BFS/DFS.
+    \begin{itemize}
+      \item This is done using the \textit{cost model} and the catalog statistics ...
+    \end{itemize}
+    \item \textbf{Search strategy}: how do we enumerate the plan space. 
+    \begin{itemize}
+      \item Think of path finding algorithms, like BFS/DFS/A$^{\star}$.
+    \end{itemize}
   \end{itemize}
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Relational algebra equivalences}
-\begin{frame}{Relational algebra equivalences \src{L14}{16}}
+\subsection{Equivalences and Heuristics}
+\begin{frame}{Relational algebra equivalences}
   \textbf{Selections}
   \begin{align*}
     \sel{c_1 \wedge c_2 \wedge \cdots \wedge c_n}(R) &\equiv \sel{c_1}\big(\sel{c_2}(\cdots \sel{c_n}(R))\big) && \text{(cascade)}\\
@@ -97,13 +131,22 @@
     R \cross (S \cross T) &\equiv (R \cross S) \cross T && \text{(associative)}\\
     R \cross S &\equiv S \cross R && \text{(commutative)}
   \end{align*}
-  {\small Recall that the ordering of attributes doesn't matter.}
+
+  % ---- speaker notes (shown only in main-notes.pdf) ----
+  \note[item]{\textbf{Selections -- cascade:} Filtering by multiple conditions $c_1 \text{ AND } c_2 \dots \wedge c_n$ is equal to filtering by each condition $c_1$, ..., $c_n$ individually.}
+  \note[item]{\textbf{Selections -- commute:} The order in which filters are applied is not important.}
+  \note[item]{\textbf{Projections -- cascade:} You can push projections as deep down as possible. Everything is OK if all required columns (for later joining and selection) on the outer (of the composite function, or upper in the parse tree) are kept.}
+  \note[item]{\textbf{Cartesian products -- associative:} by definition in traditional algebra, the Descartes product $X\cross Y = \{(x,y) \forall x \in X, y \in Y\}$ is the set of all pairs with first element from $X$, second element from $Y$. Write the $(X\cross Y) \cross Z$ out on the paper yourself, you shall verify it.}
+  \note[item]{\textbf{Cartesian products -- commutative:} In RA, the pairs are unordered. $(x,y)$ and $(y,x)$ are the same. Recall that the ordering of attributes doesn't matter}
 \end{frame}
 
-\begin{frame}{Are joins associative and commutative? \src{L14}{17}}
+\begin{frame}{Are joins associative and commutative?}
   \begin{itemize}
+    \item Cartesian products are associative and commutative. Does that hold for joins?
     \item After all, just Cartesian products with selections
-    \item You can think of them as associative and commutative \dots\ but beware of joins turning into cross-products!
+    \begin{itemize}
+      \item They are also associative and commutative. But beware, some joins may turn into cross-products!
+    \end{itemize}
   \end{itemize}
   \vspace{1mm}
   Consider $R(A,Y)$, $S(A,B)$, $T(B,Z)$:
@@ -121,74 +164,169 @@
       $(S \njoin[S.B=T.B] T) \njoin[S.A=R.A] R \;\textcolor{vinuRed}{\equiv}\; S \njoin[S.B=T.B \,\wedge\, S.A=R.A] (T \cross R)$ &
       \textbf{The same!}
   \end{tabular}
+
+  % ---- speaker notes (shown only in main-notes.pdf) ----
+  \note[item]{\textbf{Joins = cross product + selection:} Read the attempt sequentially.}
+  \note[item]{\textbf{Attempt 1 -- not legal:} At attempt 1, just merely applying associativity property will cause invalid join (no corresponding attribute on the table yet).}
+  \note[item]{\textbf{Attempt 2 -- not the same:} To resolve for this, at attempt 2, we do cross product right away to have all the columns required. }
+  \note[item]{\textbf{Attempt 3 -- the same:} We dropped one condition, so it is added back to form the correct formula as in attempt 3. }
 \end{frame}
 
-\begin{frame}[fragile]{Join ordering and transitivity \src{L14}{18--19}}
+\begin{frame}[fragile]{Join ordering}
+  \begin{itemize}
+    \item Some join orders have cross products, other don't
+  \end{itemize}
   \begin{columns}[T]
-    \column{0.5\textwidth}
-      \small
-      \textbf{Join ordering}
-      \begin{itemize}
-        \item Similarly, note that some join orders have cross products, some don't
-        \item Equivalent for the query below:
-      \end{itemize}
+    \column{0.72\textwidth}
+      \centering
+      % source: figures/join-orders.tex (standalone TikZ, compiled to PDF)
+      \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{join-orders}
+    \column{0.28\textwidth}
 \begin{lstlisting}
-SELECT * FROM R, S, T
- WHERE R.A = S.A AND S.B = T.B
+SELECT *
+  FROM R, S, T
+ WHERE R.A = S.A
+   AND S.B = T.B
 \end{lstlisting}
-      \vspace{-3mm}
-      \begin{align*}
-        &(R \njoin[R.A=S.A] S) \njoin[S.B=T.B] T\\
-        &R \njoin[R.A=S.A] (S \njoin[S.B=T.B] T)\\
-        &R \njoin[R.A=S.A] (T \njoin[S.B=T.B] S)\\
-        &(R \cross T) \njoin[R.A=S.A \,\wedge\, S.B=T.B] S
-      \end{align*}
-    \column{0.47\textwidth}
-      \small
-      \textbf{Introducing additional join conditions}
-      \begin{itemize}
-        \item Implicit join through transitivity \dots
-      \end{itemize}
-\begin{lstlisting}
-SELECT * FROM R, S, T
- WHERE R.A = S.B AND S.B = T.C
-\end{lstlisting}
-      \begin{itemize}
-        \item \dots\ can be turned into
-      \end{itemize}
-\begin{lstlisting}[escapechar=!]
-SELECT * FROM R, S, T
- WHERE R.A = S.B AND S.B = T.C
-   !\textcolor{vinuRed}{\textbf{AND R.A = T.C}}!
-\end{lstlisting}
-      \begin{itemize}
-        \item \dots\ making the join ordering \hl{$(R \njoin T) \njoin S$} possible (avoids a Cartesian product)
-      \end{itemize}
   \end{columns}
+
+  % ---- speaker notes (shown only in main-notes.pdf) ----
+  \note[item]{\textbf{Join ordering -- four equivalent orders:} $S$ can join with $R$ and $T$ right away, as the attributes are already in $S$.}
+  \note[item]{\textbf{Order with a cross product $(R \times T)$:} As $R$ and $T$ has no common attribute, they must be combined using a cross product first. Then, later when joining on $S$, both conditions must be kept.}
+\end{frame}
+
+\begin{frame}{Introducing additional join conditions}
+  \begin{itemize}
+    \item Implicit join through transitivity \dots\ can be turned into an explicit one
+  \end{itemize}
+  \vspace{3mm}
+  \centering
+  % source: figures/transitivity-example.tex (standalone, compiled to PDF)
+  \includegraphics[width=0.95\linewidth,height=0.4\textheight,keepaspectratio]{transitivity-example}
+  \vspace{3mm}
+  \raggedright
+  \begin{itemize}
+    \item \dots\ making the join ordering \hl{$(R \njoin T) \njoin S$} possible (avoids a Cartesian product)
+  \end{itemize}
+
+  % ---- speaker notes (shown only in main-notes.pdf) ----
+  \note[item]{\textbf{Transitivity -- implicit join condition:} By deduction, we have $R.A = T.C$.}
+  \note[item]{\textbf{Why adding $R.A = T.C$ helps:} Now the condition allow for the join $R \njoin T$.}
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Heuristics}
-\begin{frame}{Heuristic: push selections down}
-  \placeholder{Filter early, reorder, split, simplify; pushdown picture \src{L14}{21--22}}
+% \subsection{Heuristics}
+\begin{frame}{Heuristic: selection push-down}
+  \begin{itemize}
+    \item Apply selections as soon as you have the relevant columns
+    \item Golden rules of thumb: \textbf{Filter} early, \textbf{Reorder} most selective predicates first, \textbf{Breakdown} complex predicates to smaller selections, and \textbf{Simplify}.
+  \end{itemize}
+  \vspace{6mm}
+  \centering
+  % source: figures/selection-pushdown.tex (standalone TikZ, compiled to PDF)
+  \includegraphics[width=0.85\linewidth,height=0.6\textheight,keepaspectratio]{selection-pushdown}
+
+  % ---- speaker notes: explanations from L14 s.21 (common heuristics) and s.22 ----
+  \note[item]{\textbf{Note that the database here is the same as in Lecture 15.}}
+  \note[item]{\textbf{Common heuristics for selections} [L14, s.21]:
+    \begin{itemize}
+      \item \textbf{Filter} as early as possible
+      \item \textbf{Reorder} predicates so that the DBMS applies the most selective one first
+      \item \textbf{Break} complex predicates and push down:
+        $\sigma_{c_1 \wedge c_2 \wedge \cdots \wedge c_n}(R) \equiv \sigma_{c_1}(\sigma_{c_2}(\cdots \sigma_{c_n}(R)))$
+      \item \textbf{Simplify} complex predicates:
+        \texttt{X = Y AND Y = 3} $\Rightarrow$ \texttt{X = 3 AND Y = 3};\;
+        \texttt{L.TAX * 100 < 5} $\Rightarrow$ \texttt{L.TAX < 0.05}
+    \end{itemize}}
+  \note[item]{\textbf{Why is this an improvement?} [L14, s.22]
+    \begin{itemize}
+      \item Selection is essentially free, joins are expensive
+      \item Side effect: the intermediate inputs to the join are smaller
+    \end{itemize}}
 \end{frame}
 
-\begin{frame}{Heuristic: push projections down}
-  \placeholder{Keep requested \& required attributes (join keys) \src{L14}{23--24}}
+\begin{frame}{Heuristic: projection push-down}
+  \begin{itemize}
+    \item Keep only the columns you need to evaluate downstream operators
+  \end{itemize}
+  \vspace{3mm}
+  \centering
+  % source: figures/projection-pushdown.tex (standalone TikZ, compiled to PDF)
+  \includegraphics[width=0.85\linewidth,height=0.66\textheight,keepaspectratio]{projection-pushdown}
+
+  % ---- speaker notes: explanations from L14 s.23 (common heuristics) and s.24 ----
+  \note[item]{\textbf{Why?} This saves up memory, so you can stuff more tuples into a single page. This is good!}
+  \note[item]{\textbf{Common heuristics for projections} [L14, s.23]:
+    \begin{itemize}
+      \item \textbf{Perform} them early to create smaller tuples and reduce intermediate results
+        (if duplicates are eliminated)
+      \item \textbf{Project out} all attributes except the ones requested or required (e.g., joining keys)
+      \item This is not important for column stores \dots
+    \end{itemize}}
+  \note[item]{Other rewritings exist! (reorder selection and projection) [L14, s.24]}
 \end{frame}
 
 \begin{frame}{Heuristic: avoid Cartesian products}
-  \placeholder{Prefer theta-joins; the small $R\times T$ exception \src{L14}{25}}
+  % \placeholder{Prefer theta-joins; the small $R\times T$ exception \src{L14}{25}}
+  \begin{itemize}
+    \item Avoid Cartesian products. Use joins instead.
+    \begin{itemize}
+      \item Consider $R(A,B), \, S(B,C), \, T(C,D)$
+      \item Prefer $(R \njoin S) \njoin T$ over $(R \times T) \njoin S$
+    \end{itemize}
+  \end{itemize}
+  \vspace{4mm}
+  \centering
+  % source: figures/avoid-cartesian.tex (standalone TikZ, compiled to PDF)
+  \includegraphics[width=0.5\linewidth,height=0.4\textheight,keepaspectratio]{avoid-cartesian}
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Physical equivalences}
+% \subsection{Physical equivalences}
 \begin{frame}{Physical equivalences}
-  \placeholder{Access paths; BNLJ / INLJ / SMJ / Grace hash -- when each is good \src{L14}{26--27}}
+  % \placeholder{Access paths; BNLJ / INLJ / SMJ / Grace hash -- when each is good \src{L14}{26--27}}
+  \begin{itemize}
+    \item Base table access
+    \begin{itemize}
+      \item Heap scan
+      \item Index scan
+    \end{itemize}
+    \item Merging algorithms:
+    \item For equijoins (the joining condition is equality)
+    \begin{itemize}
+      \item Block Nested Loops: simple
+      \item Index Nested Loops: good if one table is small, and another is indexed properly
+      \item Sort-Merge Join: good when tables have equal sizes and relatively small.
+      \item Grace-Hash Join: better than normal sort when there is one small table.
+    \end{itemize}
+    \item For non-equijoins
+    \begin{itemize}
+      \item Block Nested Loops
+    \end{itemize}
+  \end{itemize}
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Summary of L14}
-\begin{frame}{Summary of L14}
-  \placeholder{Lots of plans; machines enumerate; rewriting helps; filter early \src{L14}{28}}
+% \subsection{Let's wrap thing up!}
+\begin{frame}{Let's wrap thing up!}
+  % \placeholder{Lots of plans; machines enumerate; rewriting helps; filter early \src{L14}{28}}
+  % content of [L14, s.26] "Plan space"
+  \begin{itemize}
+    \item The \hl{equivalence rules} allow us to generate multiple plans for a query.
+    \item The rules serve as conditions for applying heuristics. 
+    \begin{itemize}
+      \item So that when I apply those heuristics, I can be sure that they are correct.
+      \item RA rules on selection and projection pushdown $\to$ selection pushdown heuristic and projection pushdown heuristic.
+      \item RA rules on join ordering $\to$ heuristic on avoiding Cartesian products.
+    \end{itemize}
+    \item The heuristics are \textit{logical equivalence}. 
+    \item The \textit{physical equivalence} may be beneficial depends on the actual state of the database.
+  \end{itemize}
+
+  % ---- speaker notes: content of the original [L14, s.26] "Plan space" ----
+  \note[item]{To generate a space of candidate plans, we need to think about how to
+    rewrite relational algebra expressions into other ones}
+  \note[item]{Therefore, need a set of \textbf{equivalence rules} -- \textbf{done}}
+  \note[item]{Need \textbf{heuristics} to restrict attention to plans that are mostly better -- \textbf{done}}
+  \note[item]{Both of these were logical equivalences, need also \textbf{physical equivalences}}
 \end{frame}

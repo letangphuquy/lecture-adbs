@@ -1,0 +1,53 @@
+% =====================================================================
+%  Projection push-down on the Sailors/Reserves plan, after [L14, s.24]
+%  Compile:  pdflatex projection-pushdown.tex   (inside this folder)
+%  Output:   projection-pushdown.pdf  -> \includegraphics{projection-pushdown}
+% =====================================================================
+\makeatletter\def\input@path{{../../theme/}}\makeatother   % shared palette
+\documentclass[tikz,border=2pt,11pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage[defaultsans]{lato}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{amsmath,amssymb}
+\usepackage{vinuni-palette}
+\input{pushdown-style}
+
+\begin{document}
+\begin{tikzpicture}[x=1mm, y=1mm]
+  % ---- before: selections already pushed down (output of s.22) ------
+  \begin{scope}[local bounding box=L]
+    \opn[\hi]{p}{(0,0)}{\pi}{sname}
+    \opn{j}{(0,-9)}{\bowtie}{sid=sid}
+    \opn{s1}{(-11,-18)}{\sigma}{bid=100}
+    \opn{s2}{( 9,-18)}{\sigma}{rating > 5}
+    \node[rel] (r) at (-11,-27) {Reserves};
+    \node[rel] (t) at (  9,-27) {Sailors};
+    \draw[un] (j) -- (p);
+    \draw[bin] (s1) -- (j); \draw[bin] (s2) -- (j);
+    \draw[un] (r) -- (s1);  \draw[un] (t) -- (s2);
+  \end{scope}
+
+  \node[goes] at (45,-17) {};
+
+  % ---- after: keep only the columns needed above each input ----------
+  \begin{scope}[xshift=72mm, local bounding box=R]
+    \opn[\hi]{p}{(0,0)}{\pi}{sname}
+    \opn{j}{(0,-9)}{\bowtie}{sid=sid}
+    \opn[\hi]{p1}{(-11,-18)}{\pi}{sid}
+    \opn[\hi]{p2}{( 9,-18)}{\pi}{sname,sid}
+    \opn{s1}{(-11,-27)}{\sigma}{bid=100}
+    \opn{s2}{( 9,-27)}{\sigma}{rating > 5}
+    \node[rel] (r) at (-11,-36) {Reserves};
+    \node[rel] (t) at (  9,-36) {Sailors};
+    \draw[un] (j) -- (p);
+    \draw[bin] (p1) -- (j); \draw[bin] (p2) -- (j);
+    \draw[un] (s1) -- (p1); \draw[un] (s2) -- (p2);
+    \draw[un] (r) -- (s1);  \draw[un] (t) -- (s2);
+  \end{scope}
+
+  \begin{scope}[on background layer]
+    \node[panel, fit=(L)] {};
+    \node[panel, fit=(R)] {};
+  \end{scope}
+\end{tikzpicture}
+\end{document}
