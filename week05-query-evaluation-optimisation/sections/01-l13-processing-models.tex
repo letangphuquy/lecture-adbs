@@ -1,59 +1,720 @@
 % =====================================================================
 %  1. L13 — Query Evaluation: Processing Models
-%     (Lesson plan §1  •  Presentation flow: Act 1, ~20 min)
+%     One running query, one operator tree, three ways to execute it.
+%     Source: "Lecture 13: Query Processing Models (slide content draft)"
+%             (Edinburgh ADBS 2026, L13, 18 slides).
+%
+%  Visual language (used on every diagram in this section)
+%    navy dashed arrow, LEFT of an edge  = a request:  next()   (pull)
+%    red solid arrow,  RIGHT of an edge  = data moving up
+%    red chip  = one row  |  stack of chips = a batch  |  grid = a whole result
 % =====================================================================
-\sectionsubtitle{Lecture 13 \textbullet\ How does the DBMS execute a plan tree?}
+
+% ---------------------------------------------------------------------
+%  Shared TikZ styles and the running-example tree
+% ---------------------------------------------------------------------
+\tikzset{
+  invisible/.style={opacity=0,text opacity=0,draw opacity=0,fill opacity=0},
+  alt/.code args={<#1>#2#3}{\alt<#1>{\pgfkeysalso{#2}}{\pgfkeysalso{#3}}},
+  visible on/.style={alt={#1{}{invisible}}},
+  l13op/.style={draw=vinuNavy,line width=0.7pt,rounded corners=2pt,fill=white,text=vinuNavy,
+    font=\scriptsize,minimum height=5.5mm,minimum width=17mm,inner xsep=1.5mm},
+  l13leaf/.style={l13op,fill=vinuNavy!10},
+  l13client/.style={draw=vinuGray,dashed,rounded corners=2pt,text=vinuGray,font=\scriptsize,
+    minimum height=5mm,inner xsep=1.5mm},
+  l13edge/.style={draw=vinuNavy!35,line width=0.6pt},
+  l13req/.style={-{Stealth[length=1.6mm]},vinuNavy,dashed,line width=0.7pt},
+  l13data/.style={-{Stealth[length=2mm]},vinuRed,line width=1.3pt},
+  l13lbl/.style={font=\tiny,inner sep=1pt},
+  l13row/.style={draw=vinuRed,fill=vinuRed!10,text=vinuRed!80!black,font=\tiny\ttfamily,
+    rounded corners=1pt,inner sep=1.3pt},
+  l13tok/.style={draw=vinuRed,fill=vinuRed!15,line width=0.5pt},
+  l13tbl/.style={draw=vinuRed,fill=vinuRed!6,text=vinuRed!80!black,font=\tiny\ttfamily,
+    rounded corners=1pt,inner sep=1.2pt},
+  l13step/.style={circle,fill=vinuRed,text=white,font=\tiny\bfseries,inner sep=0.6pt,minimum size=3.2mm},
+  pics/onerow/.style={code={\draw[l13tok] (0,0) rectangle (3.2mm,1.6mm);}},
+  pics/batchrows/.style={code={\foreach \k in {2,1,0}{\draw[l13tok] ({\k*0.7mm},{\k*0.7mm}) rectangle ++(3.2mm,1.6mm);}}},
+  pics/alltable/.style={code={\draw[l13tok] (0,0) rectangle (4mm,4.8mm);
+    \foreach \y in {1.2,2.4,3.6}{\draw[vinuRed,line width=0.4pt] (0,\y mm)--(4mm,\y mm);}
+    \draw[vinuRed,line width=0.4pt] (2mm,0)--(2mm,4.8mm);}},
+}
+% horizontal / vertical spacing of the tree (redefine locally if needed)
+\def\ldx{1.9}\def\ldy{1.2}
+
+% The running-example operator tree. Node names: p (projection), j (join),
+% r (Scan R), f (filter = selection), s (Scan S); jl / jr = join's two legs.
+\newcommand{\ltree}{%
+  \node[l13op]   (p) at (0,0)              {$\pi$\; R.id, S.value};
+  \node[l13op]   (j) at (0,-\ldy)          {$\bowtie$\; R.id = S.id};
+  \node[l13leaf] (r) at (-\ldx,{-2*\ldy})  {Scan R};
+  \node[l13op]   (f) at (\ldx,{-2*\ldy})   {$\sigma$\; S.value $>$ 100};
+  \node[l13leaf] (s) at (\ldx,{-3*\ldy})   {Scan S};
+  \coordinate (jl) at ($(j.south)+(-4mm,0)$);
+  \coordinate (jr) at ($(j.south)+(4mm,0)$);
+  \draw[l13edge] (p.south)--(j.north) (jl)--(r.north) (jr)--(f.north) (f.south)--(s.north);
+}
+% Compact version for the side-by-side comparison slide.
+\newcommand{\lminitree}{%
+  \node[l13op,minimum width=9mm]   (p) at (0,0)        {$\pi$};
+  \node[l13op,minimum width=9mm]   (j) at (0,-0.85)    {$\bowtie$};
+  \node[l13leaf,minimum width=11mm] (r) at (-1.0,-1.7) {Scan R};
+  \node[l13op,minimum width=9mm]   (f) at (1.0,-1.7)   {$\sigma$};
+  \node[l13leaf,minimum width=11mm] (s) at (1.0,-2.55) {Scan S};
+  \coordinate (jl) at ($(j.south)+(-2.5mm,0)$);
+  \coordinate (jr) at ($(j.south)+(2.5mm,0)$);
+  \draw[l13edge] (p.south)--(j.north) (jl)--(r.north) (jr)--(f.north) (f.south)--(s.north);
+}
+% \lreq[opts]{upper point}{lower point}{label}   request arrow, left of the edge
+% \ldata[opts]{lower point}{upper point}{label}  data arrow, right of the edge
+\newcommand{\lreq}[4][]{\draw[l13req,#1] ($(#2)!1.5mm!-90:(#3)$) -- node[l13lbl,auto,swap,text=vinuNavy]{#4} ($(#3)!1.5mm!90:(#2)$);}
+\newcommand{\ldata}[4][]{\draw[l13data,#1] ($(#2)!1.5mm!-90:(#3)$) -- node[l13lbl,auto,swap,text=vinuRed]{#4} ($(#3)!1.5mm!90:(#2)$);}
+% Legend line used on several slides
+\newcommand{\llegend}{%
+  {\scriptsize\tikz[baseline=-0.6ex]\draw[l13req](0,0)--(6mm,0);\ request \texttt{next()}\quad
+   \tikz[baseline=-0.6ex]\draw[l13data](0,0)--(6mm,0);\ data}}
+\newcommand{\ltbl}[1]{\begin{tabular}{@{}l@{\;}l@{}}#1\end{tabular}}
+
+% =====================================================================
+\sectionsubtitle{Lecture 13 \textbullet\ One query, one plan, three ways to run it}
 \section{Processing Models}
 
+% =====================================================================
+\subsection{The problem: one query, one plan}
 % ---------------------------------------------------------------------
-\subsection{What is a processing model?}
-\begin{frame}{What is a processing model?}
-  \placeholder{Definition; the two axes: direction (pull/push) \& granularity (1 / batch / all) \src{L13}{2}}
-  \placeholder{Reminder: a query plan is a tree (leaves = scans, root = result)}
+% Slide 1
+\begin{frame}[fragile]{What happens after you press Enter?}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      {\small\textbf{Our running query} \textcolor{vinuGray}{(we use it all lecture)}}
+\begin{lstlisting}
+SELECT R.id, S.value
+FROM   R, S
+WHERE  R.id = S.id
+  AND  S.value > 100;
+\end{lstlisting}
+      \vspace{1mm}
+      {\scriptsize
+      \begin{tabular}[t]{@{}cl@{}}
+        \multicolumn{2}{@{}l}{\textbf{R}}\\\toprule
+        id & name\\\midrule 1&Ann\\2&Bob\\3&Cat\\4&Dan\\\bottomrule
+      \end{tabular}\hfill
+      \begin{tabular}[t]{@{}cr@{}}
+        \multicolumn{2}{@{}l}{\textbf{S}}\\\toprule
+        id & value\\\midrule 1&50\\2&150\\3&300\\5&200\\\bottomrule
+      \end{tabular}\hfill
+      \begin{tabular}[t]{@{}cr@{}}
+        \multicolumn{2}{@{}l}{\textbf{Result}}\\\toprule
+        R.id & S.value\\\midrule 2&150\\3&300\\\bottomrule
+      \end{tabular}}
+    \column{0.49\textwidth}
+      \centering
+      \begin{tikzpicture}[
+          box/.style={rounded corners=2pt,draw=vinuNavy,fill=white,text=vinuNavy,font=\scriptsize,
+                      minimum width=38mm,minimum height=6mm,align=center},
+          go/.style={-{Stealth[length=2mm]},vinuNavy,line width=0.8pt},
+          tag/.style={font=\tiny,text=vinuGray,align=left,anchor=west}]
+        \node[box] (sql) at (0,0) {\textbf{SQL}: says \hl{WHAT} we want};
+        \node[box,fill=vinuNavy!8] (opt) at (0,-0.8) {Optimiser: picks a plan};
+        \node[box] (plan) at (0,-1.65) {\textbf{Query execution plan}\\[-0.3ex]{\tiny a tree of operators: \hl{HOW}}};
+        \node[box,fill=vinuRed!10,draw=vinuRed] (exe) at (0,-2.5) {Executor: \textbf{runs} the plan};
+        \node[box] (res) at (0,-3.3) {Result: \texttt{(2,150)}, \texttt{(3,300)}};
+        \draw[go] (sql)--(opt); \draw[go] (opt)--(plan); \draw[go] (plan)--(exe); \draw[go] (exe)--(res);
+        \node[tag] at ($(opt.east)+(1mm,0)$) {Lecture 14\\(next)};
+        \node[tag,text=vinuRed] at ($(exe.east)+(1mm,0)$) {\textbf{Today}\\L13};
+      \end{tikzpicture}
+      \begin{keybox}
+        SQL is \textbf{declarative}: it describes the result, not the steps. Today:
+        \emph{once the DBMS has a plan, how is it actually run?}
+      \end{keybox}
+  \end{columns}
+  \note{
+  - Read the query aloud. Ask: "In plain words, what does it return?" (ids of R that have a matching S row with value above 100, plus that value.)\\
+  - Point at the tiny tables. Let students compute the answer by eye: (2,150) and (3,300). S row 1 fails the filter; S row 5 passes but has no partner in R.\\
+  - SQL never says "loop over R" or "build a hash table". It is declarative. Someone has to decide the steps (the optimiser, next lecture) and someone has to run them (the executor, today).\\
+  - Keep these two tables in mind: every model today is traced on exactly these rows.\\
+  - Reading: Ramakrishnan \& Gehrke, Database Management Systems (3rd ed.), Ch.~14; the iterator interface and pipelining are in Ch.~12, external sorting in Ch.~13.
+  }
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Iterator (Volcano) model}
-\begin{frame}{Iterator model: \texttt{open()}, \texttt{next()}, \texttt{close()}}
-  \placeholder{Interface, internal state, composability \src{L13}{3}}
+% Slide 2
+\begin{frame}{The execution plan: a tree of operators}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+      \centering
+      \def\ldy{1.0}
+      \begin{tikzpicture}
+        \ltree
+        \foreach \n/\k/\d in {r/1/west,s/2/east,f/3/east,j/4/east,p/5/east}{
+          \node[l13step] at (\n.north \d) {\k};}
+        \node[font=\tiny,text=vinuGray,anchor=west] at ($(p.east)+(2mm,0)$) {root: final answer};
+        \node[font=\tiny,text=vinuGray,anchor=north,align=center] at ($(r.south)+(0,-1mm)$) {leaf: reads\\a table};
+        \node[font=\tiny,text=vinuGray,anchor=west] at ($(s.east)+(2mm,0)$) {leaf};
+        \node[font=\tiny,text=vinuGray,anchor=east,align=right] at ($(j.west)+(-2mm,0.1)$) {parent of\\Scan R and $\sigma$};
+      \end{tikzpicture}
+    \column{0.45\textwidth}
+      \footnotesize
+      \begin{tabular}{@{}c@{\;\,}p{0.88\linewidth}@{}}
+        \tikz\node[l13step]{1};& \textbf{Scan R}: read table R, row by row (a leaf)\\[0.4ex]
+        \tikz\node[l13step]{2};& \textbf{Scan S}: read table S\\[0.4ex]
+        \tikz\node[l13step]{3};& \textbf{Selection} $\sigma$: keep S rows with value $>$ 100
+                                 {\scriptsize\textcolor{vinuGray}{(= \texttt{WHERE})}}\\[0.4ex]
+        \tikz\node[l13step]{4};& \textbf{Join} $\bowtie$: pair R and S rows with equal id.
+                                 {\scriptsize Here a \emph{hash join}: load R into a lookup table on id
+                                 (\emph{build}), then look up each S row (\emph{probe}).}\\[0.4ex]
+        \tikz\node[l13step]{5};& \textbf{Projection} $\pi$: keep only R.id, S.value
+                                 {\scriptsize\textcolor{vinuGray}{(= \texttt{SELECT} list)}}
+      \end{tabular}
+  \end{columns}
+  \vspace{1mm}
+  \uncover<2->{%
+  \begin{notebox}[The question for today]
+    Every operator gets rows from its child and hands rows to its parent.
+    \textbf{How does data move from one operator to the next?}
+    \uncover<3->{The rules for this are a \hl{processing model}: one row at a time, a batch at a time, or everything at once.}
+  \end{notebox}}
+  \note{
+  - The plan is a tree. Leaves read tables; the root gives the answer. An operator below another is its child and feeds data to its parent.\\
+  - Map the five plain-English steps to the five boxes (numbers 1 to 5).\\
+  - The join is a hash join: it first loads R into a lookup table keyed by id (build phase), then checks each S row against it (probe phase).\\
+  - Click: the central question. Every box needs input from below. Who starts? How many rows travel at once? That is exactly what a processing model decides.\\
+  - Bakery analogy for later: one cake at a time, one tray at a time, or the whole batch finished at one station before moving on.
+  }
 \end{frame}
 
-\begin{frame}{Control flow: top-down, pull-based}
-  \placeholder{Driver loop pseudo-code; LIMIT for free \src{L13}{4--5}}
-\end{frame}
-
-\begin{frame}{Operator examples}
-  \placeholder{Selection $\sigma$, heap scan, nested-loops join, external sort \src{L13}{6--10}}
-\end{frame}
-
-\begin{frame}{A whole plan in the iterator model}
-  \placeholder{Plan figure + execution order + tiny-data trace \src{L13}{11--12}}
+% =====================================================================
+\subsection{Model 1: Iterator}
+% ---------------------------------------------------------------------
+% Slide 3
+\begin{frame}[fragile]{Model 1 --- Iterator: ask for one row at a time}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      {\small Every operator offers the \textbf{same three functions}:}\\[0.4ex]
+      {\scriptsize
+      \begin{tabular}{@{}>{\ttfamily\color{vinuRed}}l@{\quad}l@{}}
+        open()  & get ready: set up state, e.g.\ open a file\\
+        next()  & return \textbf{one} row, or \texttt{EOF} (``no more rows'')\\
+        close() & clean up: free memory, close files
+      \end{tabular}}
+      \begin{itemize}\scriptsize\setlength{\itemsep}{0.1ex}
+        \item Each operator keeps its own \textbf{state}: it remembers where it stopped.
+        \item Same interface $\Rightarrow$ operators plug together like Lego (\emph{composable}).
+        \item a.k.a.\ \textbf{Volcano} / \textbf{Pipeline} model (Graefe, 1994); used by almost every DBMS.
+      \end{itemize}
+      {\scriptsize Running a whole query is just:}
+\begin{lstlisting}[language=pseudo,basicstyle=\ttfamily\scriptsize\color{vinuNavy}]
+root.open()
+while (r = root.next()) != EOF:
+    output(r)            // send to the client
+root.close()
+\end{lstlisting}
+    \column{0.50\textwidth}
+      \centering
+      \def\ldy{0.95}
+      \begin{tikzpicture}
+        \ltree
+        \node[l13client] (c) at (0,0.95) {client};
+        \lreq[visible on=<2->]{c.south}{p.north}{next()}
+        \ldata[visible on=<2->]{p.north}{c.south}{1 row}
+        \lreq[visible on=<2->]{p.south}{j.north}{next()}
+        \ldata[visible on=<2->]{j.north}{p.south}{1 row}
+        \lreq[visible on=<2->]{jl}{r.north}{}
+        \ldata[visible on=<2->]{r.north}{jl}{}
+        \lreq[visible on=<2->]{jr}{f.north}{}
+        \ldata[visible on=<2->]{f.north}{jr}{}
+        \lreq[visible on=<2->]{f.south}{s.north}{next()}
+        \ldata[visible on=<2->]{s.north}{f.south}{1 row}
+      \end{tikzpicture}\\[0.5mm]
+      \uncover<2->{\llegend\\[1mm]
+      {\scriptsize\colorbox{vinuNavy}{\color{white}\vinuHeadFontSB\ PULL-BASED\ }\;
+       \textbf{requests go down, rows come up}\\[0.3ex]
+       a parent \emph{pulls} a row from its child only when it needs one}}
+  \end{columns}
+  \note{
+  - The whole idea: every operator looks the same from the outside. open, next, close. So a join does not care whether its child is a scan or a filter.\\
+  - State: a scan remembers "page 3, slot 5"; a join remembers which R row it is working on.\\
+  - The driver loop is four lines. Point out: if the user only wants 10 rows (LIMIT 10), we simply stop calling next().\\
+  - Click: the arrows. Careful with words: "top-down" describes the requests (next() goes down). The rows themselves travel up. Pull means the parent asks; nothing moves until someone asks.
+  }
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Pipelining vs.\ blocking operators}
-\begin{frame}{Pipelining vs.\ pipeline breakers}
-  \placeholder{Tuple pipelining; blocking operators; hash join blocks only on build \src{L13}{13}}
-\end{frame}
+% Slide 4
+\begin{frame}{Iterator: tracing our query, one call at a time}
+  \begin{columns}[T]
+    \column{0.55\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \ltree
+        \node[l13client] (c) at (0,1.05) {client};
+        % hash table kept inside the join's state
+        \node[l13tbl,anchor=east,visible on=<3->,align=left] (ht) at (-1.55,0.25)
+          {\textbf{hash table on R.id}\\1$\to$Ann\quad 2$\to$\alt<5->{\textbf{\underline{Bob}}}{Bob}\\3$\to$Cat\quad 4$\to$Dan};
+        \draw[vinuRed!60,dotted,thick,visible on=<3->] (ht.south east) -- (j.west);
+        % step 1-2: requests from the top
+        \lreq[visible on=<1->,alt=<1>{line width=1.4pt}{}]{c.south}{p.north}{1}
+        \lreq[visible on=<2->,alt=<2>{line width=1.4pt}{}]{p.south}{j.north}{2}
+        % step 3: build phase
+        \lreq[visible on=<3->,alt=<3>{line width=1.4pt}{}]{jl}{r.north}{3}
+        \ldata[visible on=<3->]{r.north}{jl}{all 4 rows}
+        % step 4: probe side
+        \lreq[visible on=<4->,alt=<4>{line width=1.4pt}{}]{jr}{f.north}{4}
+        \lreq[visible on=<4->,alt=<4>{line width=1.4pt}{}]{f.south}{s.north}{4}
+        \ldata[visible on=<4->]{s.north}{f.south}{}
+        \node[l13row,anchor=west,visible on=<4>,text=vinuGray,draw=vinuGray,fill=vinuLightGray]
+          at ($(s.east)+(1mm,-1.6mm)$) {(1,50) \faTimes};
+        \node[l13row,anchor=west,visible on=<4->] at ($(s.east)+(1mm,1.6mm)$) {(2,150) \faCheck};
+        % step 5: row comes up through the join
+        \ldata[visible on=<5->]{f.north}{jr}{}
+        \node[l13row,anchor=west,visible on=<5->] at ($(f.north)!0.5!(jr)+(2.5mm,0)$) {(2,150)};
+        \ldata[visible on=<5->]{j.north}{p.south}{}
+        \node[l13row,anchor=west,visible on=<5->] at ($(j.north)!0.5!(p.south)+(2.5mm,0)$) {(2,Bob,2,150)};
+        % step 6: result to client
+        \ldata[visible on=<6->]{p.north}{c.south}{}
+        \node[l13row,anchor=west,visible on=<6->,fill=vinuRed,text=white] at ($(p.north)!0.5!(c.south)+(2.5mm,0)$) {(2,150)\; 1st result!};
+      \end{tikzpicture}
 
-\begin{frame}{Iterator model: pros and cons}
-  \placeholder{Pros/cons; why CPU overhead matters today \src{L13}{14}}
+      \llegend
+    \column{0.42\textwidth}
+      \scriptsize
+      \begin{enumerate}[<+-| alert@+>]\setlength{\itemsep}{0.3ex}
+        \item Client calls \texttt{$\pi$.next()}.
+        \item $\pi$ needs a row: it calls \texttt{$\bowtie$.next()}.
+        \item \textbf{Build} (first call only): $\bowtie$ calls \texttt{ScanR.next()} until \texttt{EOF},
+              putting every R row in a hash table.
+        \item \textbf{Probe}: $\bowtie$ calls \texttt{$\sigma$.next()}, which calls \texttt{ScanS.next()}.
+              (1,50) fails, so $\sigma$ asks again: (2,150) passes.
+        \item $\bowtie$ looks up id 2, finds \textbf{Bob}, returns (2,Bob,2,150).
+        \item $\pi$ keeps R.id, S.value: \textbf{(2,150)} reaches the client
+              while most of S is still unread.
+        \item Next calls: (3,300) the same way. (5,200) has no partner in R,
+              so $\bowtie$ asks again, gets \texttt{EOF}: done.
+      \end{enumerate}
+  \end{columns}
+  \note{
+  - Go slowly, one click per step. Physically point down the tree for each request and up for each row.\\
+  - Step 3: the build phase happens only on the first next() call. After that, the hash table lives in the join's state.\\
+  - Step 4: selection is "on the fly": it just keeps asking its child until a row passes.\\
+  - Step 6: highlight that the first result reaches the user while most of S is still unread.\\
+  - Step 7: if one S row matched several R rows, the join would remember the extra matches in its state and return one per next() call.\\
+  - Ask: "How many next() calls did ONE result row cost?" (Several: client to pi, pi to join, join to sigma, sigma to scan, twice.)
+  }
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Vectorised (batch) model}
-\begin{frame}{Vectorised (batch) model}
-  \placeholder{\texttt{next()} returns a batch; fewer calls, SIMD, OLAP \src{L13}{15--16}}
+% Slide 5a
+\begin{frame}{Performance (1/2): pipelining and blocking}
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+      \centering
+      \def\ldy{1.1}
+      \begin{tikzpicture}
+        \ltree
+        % the pipeline band: S rows flow straight to the top
+        \begin{scope}[on background layer]
+          \draw[vinuRed!14,line width=8mm,line cap=round,line join=round]
+            (s.center)--(f.center)--(j.center)--(p.center);
+        \end{scope}
+        \ldata{s.north}{f.south}{}
+        \ldata{f.north}{jr}{}
+        \ldata{j.north}{p.south}{}
+        \node[font=\tiny\bfseries,text=vinuRed,anchor=west] at ($(f.east)+(1mm,0.45)$) {pipeline};
+        % build side
+        \ldata{r.north}{jl}{}
+        \node[font=\tiny,text=vinuNavy,align=center,anchor=north] at ($(r.south)+(0,-1mm)$)
+          {build side: read \textbf{all} of R\\before the first probe};
+        % ORDER BY variant
+        \node[l13op,draw=vinuRed,line width=1pt,visible on=<2->] (o) at (0,\ldy) {Sort by S.value};
+        \draw[vinuRed,line width=2.2pt,visible on=<2->] ($(p.north)+(-6mm,1.6mm)$)--($(p.north)+(6mm,1.6mm)$);
+        \node[font=\tiny,text=vinuRed,anchor=west,align=left,visible on=<2->] at ($(o.east)+(1mm,0)$)
+          {\texttt{ORDER BY S.value}:\\waits for \textbf{every} row};
+        \node[l13row,anchor=east,visible on=<2->] at ($(p.west)+(-1mm,0.55)$) {(2,150) (3,300) \dots};
+      \end{tikzpicture}
+    \column{0.47\textwidth}
+      \only<1>{%
+      \begin{keybox}[Pipelining]
+        A row travels through \textbf{as many operators as possible} before the next row is fetched.
+        \begin{itemize}\setlength{\itemsep}{0pt}
+          \item No intermediate results to store $\Rightarrow$ \textbf{low memory}
+          \item First answers arrive \textbf{early}
+        \end{itemize}
+      \end{keybox}}
+      \only<2->{%
+      \begin{notebox}[Blocking operators break the pipeline]
+        \scriptsize They must read \textbf{all} their input before they output anything:
+        \begin{itemize}\setlength{\itemsep}{0pt}
+          \item \textbf{Sort}: the smallest value may be the last row read
+          \item \textbf{Hash join, build side}: all of R must be in the hash table
+                (the probe side still pipelines)
+          \item \textbf{GROUP BY}, \textbf{DISTINCT} on unsorted input
+          \item \textbf{Subqueries}: the outer query often waits for the inner one
+        \end{itemize}
+        Their input is \emph{materialised}: stored in full, on disk if too big.
+      \end{notebox}}
+  \end{columns}
+  \note{
+  - The red band: each S row climbs scan, filter, join, projection without stopping. Nothing is stored in between. That is pipelining.\\
+  - But the join could not start probing before ALL of R was in the hash table. That part is blocking.\\
+  - Click: imagine we add ORDER BY S.value. The sort cannot output the smallest value until it has seen every row: the smallest might come last. The pipeline stops at the dam. (In the iterator model, Sort does this heavy work inside open(); see the backup slide on external sort.)\\
+  - GROUP BY: an average per group is only final after the last row of that group has been seen.\\
+  - Keep the word "materialised" in mind: Model 3 turns this into a whole strategy.
+  }
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Materialisation model}
-\begin{frame}{Materialisation model}
-  \placeholder{Bottom-up push; OLTP vs OLAP; two meanings of ``materialise'' \src{L13}{17--18}}
+% Slide 5b
+\begin{frame}{Performance (2/2): the cost of one row at a time}
+  \begin{columns}[T]
+    \column{0.40\textwidth}
+      {\small\textbf{\textcolor{vinuNavy}{\faCheck\ Pros}}}
+      \begin{itemize}\scriptsize\setlength{\itemsep}{0.1ex}
+        \item Simple, uniform interface; easy to combine operators
+        \item Low memory, early results (pipelining)
+        \item \texttt{LIMIT 10}: just stop after 10 \texttt{next()} calls
+      \end{itemize}
+      \vspace{0.6ex}
+      {\small\textbf{\textcolor{vinuRed}{\faTimes\ Cons}}}
+      \begin{itemize}\scriptsize\setlength{\itemsep}{0.1ex}
+        \item One \texttt{next()} call \textbf{per row, per operator}
+        \item \textbf{Virtual calls}: which \texttt{next()} runs is known only at run time,
+              so the CPU's guesses (branch prediction) fail more often
+        \item \textbf{Poor code locality}: the CPU jumps between operators' code,
+              which is often not in its cache
+        \item Each operator saves its state between calls (bookkeeping)
+      \end{itemize}
+    \column{0.56\textwidth}
+      \centering
+      \begin{tikzpicture}[font=\footnotesize]
+        \node[align=center,text=vinuNavy] (a) at (0,0)
+          {\textbf{1,000,000} S rows \;$\times$\; \textbf{4} operators\\[-0.2ex]
+           {\scriptsize (Scan S, $\sigma$, $\bowtie$, $\pi$)}};
+        \node[align=center,text=vinuRed,font=\vinuHeadFontSB\Large] (b) at (0,-1.1) {$\approx$ 4,000,000 \texttt{next()} calls};
+        % work vs overhead bar
+        \node[anchor=west,font=\scriptsize,text=vinuNavy] at (-3.2,-2.1) {per row:};
+        \fill[vinuNavy!70] (-1.8,-2.3) rectangle (0.2,-1.9);
+        \fill[vinuRed!70] (0.2,-2.3) rectangle (2.4,-1.9);
+        \node[font=\tiny,text=white] at (-0.8,-2.1) {real work (1 comparison)};
+        \node[font=\tiny,text=white] at (1.3,-2.1) {call overhead};
+        \node[font=\scriptsize,text=vinuGray,align=center] at (0.3,-2.75)
+          {a call costs a few ns, about as much as the work itself};
+      \end{tikzpicture}
+
+      \vspace{3mm}
+      \uncover<2->{%
+      \begin{tcolorbox}[enhanced,colback=vinuRed,colframe=vinuRed,arc=1.5mm,boxrule=0pt,
+                        fontupper=\vinuHeadFontSB\small\color{white},halign=center]
+        Can we pay for one \texttt{next()} call\\and get \emph{many} rows back?
+      \end{tcolorbox}}
+  \end{columns}
+  \note{
+  - Pros first: this model is simple and saves memory; it is why PostgreSQL and MySQL use it.\\
+  - The cost: count the calls. Every S row passes 4 operators, so a million rows mean about four million next() calls.\\
+  - One call is cheap, a few nanoseconds. But the real work per row, for example one comparison value > 100, is just as small. So the calls can take as much time as the work.\\
+  - Virtual calls: the program only learns at run time which operator's next() to run, so the CPU's branch prediction guesses wrong more often.\\
+  - Code locality: the CPU hops between scan code, filter code, join code... so the code it needs is often not in its cache.\\
+  - Click: the natural question. This leads straight to Model 2.
+  }
+\end{frame}
+
+% =====================================================================
+\subsection{Model 2: Vectorised}
+% ---------------------------------------------------------------------
+% Slide 6a
+\begin{frame}{Model 2 --- Vectorised: pass a batch of rows}
+  {\small\textcolor{vinuGray}{\emph{Question:} can one \texttt{next()} call return many rows?}\ \ \hl{Yes!}}
+  \vspace{1mm}
+  \begin{columns}[T]
+    \column{0.50\textwidth}
+      \centering
+      \def\ldy{0.95}
+      \begin{tikzpicture}
+        \ltree
+        \node[l13client] (c) at (0,0.95) {client};
+        \lreq{c.south}{p.north}{next()}
+        \ldata{p.north}{c.south}{}
+        \lreq{p.south}{j.north}{next()}
+        \ldata{j.north}{p.south}{}
+        \lreq{jl}{r.north}{}
+        \ldata{r.north}{jl}{}
+        \lreq{jr}{f.north}{}
+        \ldata{f.north}{jr}{}
+        \lreq{f.south}{s.north}{next()}
+        \ldata{s.north}{f.south}{}
+        \foreach \a/\b in {p.north/c.south,j.north/p.south,f.north/jr,s.north/f.south}{
+          \path ($(\a)!0.5!(\b)$) ++(2.6mm,-1.2mm) pic {batchrows};}
+        \path ($(r.north)!0.5!(jl)$) ++(2mm,-2.6mm) pic {batchrows};
+        \node[font=\tiny,text=vinuRed,anchor=west] at ($(s.east)+(1mm,0.45)$) {$\leftarrow$ a batch of 1,000 rows};
+      \end{tikzpicture}\\[0.5mm]
+      \llegend
+    \column{0.47\textwidth}
+      \begin{itemize}\small\setlength{\itemsep}{0.6ex}
+        \item Same \texttt{open/next/close}, same \textbf{top-down pull}.
+        \item One change: \texttt{next()} returns a \hl{batch} (e.g.\ 1,000 rows), not one row.
+        \item Inside each operator, a \textbf{tight loop} processes the whole batch.
+        \item Batch size is tuned to the hardware and the query.
+      \end{itemize}
+      \vspace{1mm}
+      \uncover<2->{%
+      {\footnotesize
+      \begin{tabular}{@{}lr@{}}\toprule
+        1M S rows $\times$ 4 operators & \texttt{next()} calls\\\midrule
+        Iterator (1 row / call)        & 4,000,000\\
+        Vectorised (1,000 rows / call) & \textbf{\textcolor{vinuRed}{4,000}}\\\bottomrule
+      \end{tabular}}}
+  \end{columns}
+  \note{
+  - Same tree, same arrows, same pull direction. Point at the arrows: they now carry a tray of rows instead of a single row. Bakery: trays instead of single cakes.\\
+  - For our tiny S table, one call to Scan S would return all four rows at once: (1,50), (2,150), (3,300), (5,200). Sigma would return the batch (2,150), (3,300), (5,200).\\
+  - The join still builds its hash table from R first, then probes it with whole batches of S rows and emits batches of joined rows.\\
+  - Click: the arithmetic. Four million calls become four thousand.
+  }
 \end{frame}
 
 % ---------------------------------------------------------------------
-\subsection{Summary of L13}
-\begin{frame}{Processing models at a glance}
-  \placeholder{3-column summary table + LIMIT quiz \src{L13}{19}}
+% Slide 6b
+\begin{frame}[fragile]{Vectorised: why batches are fast, and what they cost}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      {\scriptsize\textbf{$\sigma$.next() --- Iterator}}
+\begin{lstlisting}[language=pseudo,basicstyle=\ttfamily\scriptsize\color{vinuNavy}]
+next():
+  loop:
+    r = child.next()   // ONE row
+    if r is EOF: return EOF
+    if p(r): return r
+\end{lstlisting}
+      {\scriptsize\textbf{$\sigma$.next() --- Vectorised}}
+\begin{lstlisting}[language=pseudo,basicstyle=\ttfamily\scriptsize\color{vinuNavy}]
+next():
+  out = []
+  while size(out) < n:
+    B = child.next()   // a BATCH
+    if B is EOF: break
+    for each row r in B:   // tight loop
+      if p(r): out.add(r)
+  if out is empty: return EOF
+  return out
+\end{lstlisting}
+    \column{0.50\textwidth}
+      {\footnotesize\textbf{SIMD} = \emph{Single Instruction, Multiple Data}: one CPU instruction works on several values at once.}
+      \begin{center}
+      \begin{tikzpicture}[cell/.style={draw=vinuNavy,minimum width=6.5mm,minimum height=3.8mm,font=\tiny\ttfamily,inner sep=0}]
+        \foreach \v [count=\i] in {50,150,300,200,90,120,40,500}{
+          \node[cell,fill=vinuNavy!6] (v\i) at (\i*0.65,0) {\v};}
+        \node[font=\tiny,anchor=east,text=vinuNavy] at ($(v1.west)+(-1mm,0)$) {S.value};
+        \node[fill=vinuRed,text=white,font=\tiny\bfseries,rounded corners=1pt,minimum width=52mm] (ins)
+          at ($(v4)!0.5!(v5)+(0,-0.55)$) {ONE instruction:\; $>$ 100 ?};
+        \foreach \m/\c [count=\i] in {0/white,1/vinuRed!20,1/vinuRed!20,1/vinuRed!20,0/white,1/vinuRed!20,0/white,1/vinuRed!20}{
+          \node[cell,fill=\c] (m\i) at (\i*0.65,-1.1) {\m};}
+        \node[font=\tiny,anchor=east,text=vinuNavy] at ($(m1.west)+(-1mm,0)$) {keep?};
+      \end{tikzpicture}
+      \end{center}
+      \vspace{-3mm}
+      {\scriptsize Only possible because a batch puts many values side by side.
+      With one row per call there is nothing to do in parallel.\par}
+      \vspace{1mm}
+      \uncover<2->{%
+      \begin{notebox}[The price]
+        \scriptsize
+        \textbf{More memory}: each operator holds a batch, not one row.
+        \texttt{LIMIT 10} may still build a 1,000-row batch: wasted work.\\
+        \textcolor{vinuNavy}{\faChartBar\ Still ideal for \textbf{OLAP}: queries that scan many rows.}
+      \end{notebox}}
+  \end{columns}
+  \note{
+  - Put the two versions of sigma side by side. The logic is the same: ask the child, keep the rows that pass. The only difference: the vectorised one gets a whole array of rows per call and filters them in a tight for-loop.\\
+  - A tight loop over an array is what CPUs love: the same few instructions again and again, data next to each other in memory.\\
+  - SIMD: modern CPUs can compare e.g. 8 values against 100 with ONE instruction. This only works when the values sit together in a batch. That is why SIMD belongs to the vectorised model, not the iterator model.\\
+  - Click: the price. Memory per batch, and wasted work with LIMIT. Batch size is a tuning knob between these.\\
+  - OLAP = Online Analytical Processing: "total sales per country this year". Many rows scanned, so fewer calls pay off.
+  }
+\end{frame}
+
+% =====================================================================
+\subsection{Model 3: Materialisation}
+% ---------------------------------------------------------------------
+% Slide 7
+\begin{frame}{Model 3 --- Materialisation: finish, then push}
+  {\small\textcolor{vinuGray}{\emph{Question:} what if each operator finishes \textbf{all} its work before passing anything up?}}
+  \vspace{1mm}
+  \begin{columns}[T]
+    \column{0.62\textwidth}
+      \centering
+      \def\ldx{2.1}\def\ldy{1.0}
+      \begin{tikzpicture}
+        \ltree
+        \node[l13client] (c) at (0,0.95) {client};
+        % pushes (no requests!)
+        \ldata[visible on=<4->]{r.north}{jl}{push}
+        \ldata[visible on=<3->]{s.north}{f.south}{push}
+        \ldata[visible on=<4->]{f.north}{jr}{push}
+        \ldata[visible on=<5->]{j.north}{p.south}{push}
+        \ldata[visible on=<6->]{p.north}{c.south}{push}
+        % materialised results next to the operator that produced them
+        \node[l13step,visible on=<1->] at (r.north west) {1};
+        \node[l13tbl,anchor=east,visible on=<1->] at ($(r.west)+(-1mm,0)$) {\ltbl{1&Ann\\2&Bob\\3&Cat\\4&Dan}};
+        \node[l13step,visible on=<2->] at (s.north west) {2};
+        \node[l13tbl,anchor=east,visible on=<2->] at ($(s.west)+(-2.5mm,0)$) {\ltbl{1&50\\2&150\\3&300\\5&200}};
+        \node[l13step,visible on=<3->] at (f.north east) {3};
+        \node[l13tbl,anchor=west,visible on=<3->] at ($(f.east)+(2.5mm,0)$) {\ltbl{2&150\\3&300\\5&200}};
+        \node[l13step,visible on=<4->] at (j.north east) {4};
+        \node[l13tbl,anchor=west,visible on=<4->] at ($(j.east)+(2.5mm,0)$) {\ltbl{2,Bob&2,150\\3,Cat&3,300}};
+        \node[l13step,visible on=<5->] at (p.north east) {5};
+        \node[l13tbl,anchor=west,visible on=<5->] at ($(p.east)+(2.5mm,0)$) {\ltbl{2&150\\3&300}};
+      \end{tikzpicture}\\[0.5mm]
+      {\scriptsize\tikz[baseline=-0.6ex]\draw[l13data](0,0)--(6mm,0);\ whole result pushed up \quad
+       \textcolor{vinuGray}{no \texttt{next()} requests at all}}
+    \column{0.35\textwidth}
+      \only<1-6>{%
+      \footnotesize\textbf{Bottom-up, one operator at a time:}
+      \begin{enumerate}\setlength{\itemsep}{0.3ex}
+        \item<1-| alert@1> Scan R $\to$ all R rows
+        \item<2-| alert@2> Scan S $\to$ all S rows
+        \item<3-| alert@3> $\sigma$ $\to$ all S rows with value $>$ 100
+        \item<4-| alert@4> $\bowtie$ $\to$ all joined rows
+        \item<5-| alert@5> $\pi$ $\to$ the final result
+      \end{enumerate}
+      \uncover<6->{Each finished result is \textbf{pushed} to the parent. The child does not wait to be asked.}}%
+      \only<7>{%
+      \begin{itemize}\scriptsize\setlength{\itemsep}{0.4ex}
+        \item[\textcolor{vinuNavy}{\faCheck}] No \texttt{next()} calls back and forth: each operator is \textbf{one tight loop} over its data $\Rightarrow$ good \textbf{code and data locality} (CPU cache)
+        \item[\textcolor{vinuRed}{\faTimes}] Every intermediate result is stored \textbf{in full}: can be huge, may spill to disk
+        \item[\textcolor{vinuRed}{\faTimes}] \texttt{LIMIT 10}: may compute every row unless the limit is pushed down
+        \item[\textcolor{vinuNavy}{\faCheck}] Good for \textbf{OLTP}: small queries on a few rows, so results are small
+        \item[\textcolor{vinuRed}{\faTimes}] Bad for \textbf{OLAP}: results may not fit in memory
+      \end{itemize}}
+  \end{columns}
+  \note{
+  - Question: what if we stop the back-and-forth completely?\\
+  - Step through bottom-up. Scan R produces all of R. Scan S all of S. Sigma reads all of S and produces all three rows above 100. The join builds and probes and produces both joined rows. Projection produces the final two rows.\\
+  - Notice: these are the SAME rows we traced in the iterator model. Only the timing and the amount moved per step changed.\\
+  - Push vs pull: here the child hands over its complete output without being asked. There are no dashed request arrows on this picture at all.\\
+  - Click: properties. Locality is great: the CPU stays in one operator's loop for a long time. But all the middle tables must be stored.\\
+  - OLTP = Online Transaction Processing: "show my bank balance". Touches few rows, so middle results are tiny and this model is fast.\\
+  - Link back: a blocking operator materialises its input. This model materialises everything.
+  }
+\end{frame}
+
+% =====================================================================
+\subsection{Same query, three ways}
+% ---------------------------------------------------------------------
+% Slide 8
+\begin{frame}{Execute the same query in three different ways}
+  \centering
+  \begin{columns}[T]
+    \column{0.32\textwidth}
+      \centering
+      {\colorbox{vinuNavy}{\color{white}\vinuHeadFontSB\small\ Iterator\ }}\\[2mm]
+      \begin{tikzpicture}
+        \lminitree
+        \node[l13client] (c) at (0,0.72) {client};
+        \foreach \u/\d in {c.south/p.north,p.south/j.north,jl/r.north,jr/f.north,f.south/s.north}{\lreq{\u}{\d}{}}
+        \foreach \d/\u in {p.north/c.south,j.north/p.south,r.north/jl,f.north/jr,s.north/f.south}{\ldata{\d}{\u}{}}
+        \foreach \a/\b in {p.north/c.south,j.north/p.south,f.north/jr,s.north/f.south}{
+          \path ($(\a)!0.5!(\b)$) ++(2.6mm,-0.8mm) pic {onerow};}
+      \end{tikzpicture}\\[1mm]
+      {\footnotesize\textbf{one row} per \texttt{next()}\\ \textcolor{vinuGray}{pull, top-down}}
+    \column{0.32\textwidth}
+      \centering
+      \uncover<2->{%
+      {\colorbox{vinuNavy}{\color{white}\vinuHeadFontSB\small\ Vectorised\ }}\\[2mm]
+      \begin{tikzpicture}
+        \lminitree
+        \node[l13client] (c) at (0,0.72) {client};
+        \foreach \u/\d in {c.south/p.north,p.south/j.north,jl/r.north,jr/f.north,f.south/s.north}{\lreq{\u}{\d}{}}
+        \foreach \d/\u in {p.north/c.south,j.north/p.south,r.north/jl,f.north/jr,s.north/f.south}{\ldata{\d}{\u}{}}
+        \foreach \a/\b in {p.north/c.south,j.north/p.south,f.north/jr,s.north/f.south}{
+          \path ($(\a)!0.5!(\b)$) ++(2.6mm,-1.2mm) pic {batchrows};}
+      \end{tikzpicture}\\[1mm]
+      {\footnotesize\textbf{a batch} per \texttt{next()}\\ \textcolor{vinuGray}{pull, top-down}}}
+    \column{0.32\textwidth}
+      \centering
+      \uncover<3->{%
+      {\colorbox{vinuRed}{\color{white}\vinuHeadFontSB\small\ Materialisation\ }}\\[2mm]
+      \begin{tikzpicture}
+        \lminitree
+        \node[l13client] (c) at (0,0.72) {client};
+        \foreach \d/\u in {p.north/c.south,j.north/p.south,r.north/jl,f.north/jr,s.north/f.south}{\ldata{\d}{\u}{}}
+        \foreach \a/\b in {p.north/c.south,j.north/p.south,f.north/jr,s.north/f.south}{
+          \path ($(\a)!0.5!(\b)$) ++(2.6mm,-2.4mm) pic {alltable};}
+      \end{tikzpicture}\\[1mm]
+      {\footnotesize\textbf{the whole result}, once\\ \textcolor{vinuRed}{push, bottom-up}}}
+  \end{columns}
+  \vspace{1mm}
+  {\tiny
+   \tikz[baseline=-0.6ex]\draw[l13req](0,0)--(6mm,0);\ request \texttt{next()} (pull)\qquad
+   \tikz[baseline=-0.6ex]\draw[l13data](0,0)--(6mm,0);\ data\qquad
+   \tikz[baseline=-0.4ex]\pic{onerow};\ one row\qquad
+   \tikz[baseline=-0.4ex]\pic{batchrows};\ batch\qquad
+   \tikz[baseline=0.2ex]\pic{alltable};\ whole result}
+  \note{
+  - This is the slide to remember. Same tree, same rows, same answer, three times.\\
+  - Left: dashed request arrows and one small chip per arrow: one row per call.\\
+  - Middle: same arrows, a stack of chips: a batch per call.\\
+  - Right: NO dashed arrows, because nobody asks. A full table on each arrow: the child pushes its whole result once.\\
+  - Ask the class: "Which picture has the most function calls? Which needs the most memory?"
+  }
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 9
+\begin{frame}{Comparison and trade-offs}
+  \centering
+  \scriptsize
+  \renewcommand{\arraystretch}{1.12}
+  \begin{tabular}{@{}>{\bfseries}p{0.20\textwidth}p{0.24\textwidth}p{0.24\textwidth}p{0.24\textwidth}@{}}
+    \toprule
+    & \textcolor{vinuNavy}{Iterator (Volcano)} & \textcolor{vinuNavy}{Vectorised (Batch)} & \textcolor{vinuRed}{Materialisation}\\
+    \midrule
+    Data unit per step   & one row & a batch (e.g.\ 1,000 rows) & the entire result\\
+    Direction            & top-down \textbf{pull} & top-down \textbf{pull} & bottom-up \textbf{push}\\
+    Function calls       & very many (per row) & few (per batch) & fewest (no \texttt{next()})\\
+    Memory               & lowest (one row) & medium (one batch) & highest (all intermediate results)\\
+    Pipelining           & yes, row by row & yes, batch by batch & no: every result is stored first\\
+    CPU locality         & poor & good (tight loops, SIMD) & good (one loop per operator)\\
+    \texttt{LIMIT 10}    & stops at once & may build one extra batch & may compute everything\\
+    Typical workload     & general purpose (e.g.\ PostgreSQL, MySQL) & OLAP (analysis over many rows) & OLTP (small, quick queries)\\
+    \bottomrule
+  \end{tabular}
+  \vspace{1.5mm}
+  {\footnotesize\colorbox{vinuRed}{\color{white}\vinuHeadFontSB\scriptsize\ NO WINNER\ }\;
+   Each model trades \textbf{function-call overhead} against \textbf{memory}; none is best everywhere.}
+  \note{
+  - Walk the table row by row, but let the class fill each cell first: they can answer it from the three pictures on the last slide.\\
+  - Stress the trade-off framing: the iterator model is not "bad", it is the default in most classic systems because it is simple and memory-friendly.\\
+  - LIMIT row is a good quiz: which model can stop earliest? (Iterator.)
+  }
+\end{frame}
+
+% ---------------------------------------------------------------------
+% Slide 10
+\begin{frame}{The mental model to take home}
+  \centering
+  \begin{tcolorbox}[enhanced,colback=vinuNavy,colframe=vinuNavy,arc=2mm,boxrule=0pt,width=0.86\textwidth,
+                    fontupper=\vinuHeadFontSB\normalsize\color{white},halign=center,top=1.5mm,bottom=1.5mm]
+    More data processed per step means fewer function calls,\\ but potentially more memory.
+  \end{tcolorbox}
+  \vspace{1mm}
+  \begin{tikzpicture}[font=\scriptsize]
+    \draw[-{Stealth},vinuNavy,line width=0.9pt] (1.5,0.85) -- node[above,font=\scriptsize,inner sep=1pt]{fewer function calls} (8.5,0.85);
+    \draw[vinuNavy!40,line width=1.2pt] (0,0) -- (10,0);
+    \foreach \x/\name/\unit in {0.6/Iterator/one row at a time,
+                                5/Vectorised/many rows at a time,
+                                9.4/Materialisation/all rows at a time}{
+      \fill[vinuRed] (\x,0) circle (1.2mm);
+      \node[text=vinuNavy,font=\vinuHeadFontSB\footnotesize] at (\x,0.4) {\name};
+      \node[text=vinuNavy] at (\x,-0.35) {\unit};}
+    \draw[-{Stealth},vinuRed,line width=0.9pt] (1.5,-0.75) -- node[below,font=\scriptsize,inner sep=1pt]{more memory} (8.5,-0.75);
+  \end{tikzpicture}
+  \vspace{2mm}
+  {\footnotesize
+   \begin{tabular}{@{}l@{\qquad\qquad}l@{}}
+     \colorbox{vinuNavy}{\color{white}\vinuHeadFontSB\scriptsize\ L13 TODAY\ }\; \textbf{HOW} a plan is executed &
+     \colorbox{vinuGold!90!black}{\color{white}\vinuHeadFontSB\scriptsize\ L14 NEXT\ }\; \textbf{WHICH} plan the optimiser chooses
+   \end{tabular}}
+  \note{
+  - One sentence to remember: more rows per step, fewer calls, more memory.\\
+  - Iterator and materialisation are the two ends of one dial; vectorised sits in the middle.\\
+  - Bridge: today we took the plan as given. But who chose a hash join, and who decided to filter S before the join? That is query optimisation, Lecture 14.
+  }
 \end{frame}

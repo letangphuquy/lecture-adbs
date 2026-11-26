@@ -1,0 +1,86 @@
+% =====================================================================
+%  L13 backup slides: inside the operators (iterator model)
+%  Kept out of the main flow; show them if students ask
+%  "what does next() actually do inside a scan / join / sort?"
+% =====================================================================
+\sectionsubtitle{Lecture 13 \textbullet\ What \texttt{next()} does inside each operator}
+\section{Backup: Operator Internals}
+
+\subsection{Selection and heap scan}
+\begin{frame}[fragile]{Backup: Selection and Heap Scan}
+  \begin{columns}[T]
+    \column{0.47\textwidth}
+      {\small\textbf{Selection} $\sigma_p$ \textcolor{vinuGray}{(our $\sigma$ S.value $>$ 100)}}
+      \begin{itemize}\footnotesize\setlength{\itemsep}{0.2ex}
+        \item Streaming, ``on the fly'': a little work per row.
+        \item State: the predicate $p$.
+        \item \texttt{open()} / \texttt{close()}: just call the child's.
+      \end{itemize}
+\begin{lstlisting}[language=pseudo,basicstyle=\ttfamily\scriptsize\color{vinuNavy}]
+next():
+  loop:
+    r = child.next()
+    if r is EOF: return EOF
+    if p(r): return r
+\end{lstlisting}
+    \column{0.50\textwidth}
+      {\small\textbf{Heap Scan} \textcolor{vinuGray}{(our Scan R, Scan S)}}
+      \begin{itemize}\footnotesize\setlength{\itemsep}{0.2ex}
+        \item A leaf: no child, reads a \emph{heap file} (rows in no order).
+        \item \texttt{open()}: open the file, cursor at page 1, slot 1.
+        \item \texttt{next()}: return the row at the cursor, move to the next slot;
+              at the end of a page, go to the next page; after the last page, \texttt{EOF}.
+        \item \texttt{close()}: close the file.
+      \end{itemize}
+      \begin{center}
+      \begin{tikzpicture}[pg/.style={draw=vinuNavy,fill=vinuNavy!6,minimum width=13mm,minimum height=11mm}]
+        \foreach \i in {1,2,3}{
+          \node[pg] (pg\i) at (\i*1.6,0) {};
+          \node[font=\tiny,text=vinuGray] at ($(pg\i.south)+(0,-1.5mm)$) {page \i};
+          \foreach \k in {1,2,3}{\draw[vinuNavy!40] ($(pg\i.north west)+(1mm,{-\k*2.7mm})$) -- ++(11mm,0);}}
+        \draw[-{Stealth},vinuRed,line width=1.2pt] ($(pg2.north west)+(-2.5mm,-5.4mm)$) -- ++(2.3mm,0);
+        \node[font=\tiny,text=vinuRed,anchor=south] at ($(pg2.north west)+(-1.5mm,0)$) {cursor};
+      \end{tikzpicture}
+      \end{center}
+  \end{columns}
+  \note{From the textbook (R\&G 14.1.1):     No index and no sort order $\Rightarrow$ no shortcut: scan every page and test every row. Cost = one I/O per page.}
+\end{frame}
+
+\subsection{Nested loops join and external sort}
+\begin{frame}[fragile]{Backup: Nested Loops Join and Sort}
+  \begin{columns}[T]
+    \column{0.49\textwidth}
+      {\small\textbf{Nested Loops Join} $R \bowtie_p S$}
+      \begin{itemize}\footnotesize\setlength{\itemsep}{0.1ex}
+        \item For each row of R (outer), go through all of S (inner).
+        \item State: the current R row \texttt{r}.
+        \item When S runs out: restart S, move to the next R row.
+      \end{itemize}
+\begin{lstlisting}[language=pseudo,basicstyle=\ttfamily\scriptsize\color{vinuNavy}]
+next():
+  loop:
+    if r is EOF: return EOF
+    s = right.next()
+    if s is EOF:                  // S finished
+      right.close(); right.open() // restart S
+      r = left.next()             // next R row
+      continue
+    if p(r, s): return (r, s)
+\end{lstlisting}
+    \column{0.48\textwidth}
+      {\small\textbf{Sort} (2-pass external sort)}
+      \begin{itemize}\footnotesize\setlength{\itemsep}{0.2ex}
+        \item \texttt{open()} does the heavy work, and it is \textbf{blocking}:
+          \begin{itemize}\scriptsize
+            \item \textbf{Pass 0}: read what fits in memory, sort it, write a \emph{sorted run} to disk. Repeat.
+            \item Open every run, load its first page.
+          \end{itemize}
+        \item \texttt{next()} = \textbf{Pass 1 (merge)}: return the smallest front row of all runs.
+        \item \texttt{close()}: delete the runs, close the child.
+      \end{itemize}
+      {\scriptsize\textcolor{vinuGray}{Analogy: sort 1,000 exam papers on a desk that holds 100: make sorted piles of 100, then keep taking the top paper that comes first.}}
+  \end{columns}
+  \note{From the textbook (R\&G 14.4.1), bigger chunks mean far less I/O:     {\scriptsize Reserves (1,000 pages) $\bowtie$ Sailors (500 pages):\;
+    row at a time $\approx$ 50M I/Os (\textasciitilde140 h);\; page at a time 501,000 I/Os (\textasciitilde1.4 h);\;
+    block of 100 pages 6,000 I/Os (\textasciitilde1 min). Same idea as the vectorised model.}}
+\end{frame}
